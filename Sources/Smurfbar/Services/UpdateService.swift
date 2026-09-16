@@ -184,8 +184,9 @@ class UpdateService: ObservableObject {
             return
         }
 
-        // Find .zip or .dmg asset
-        if let asset = target.assets?.first(where: { $0.name.hasSuffix(".zip") || $0.name.hasSuffix(".dmg") }),
+        // Prefer .zip for automatic in-place installation, fallback to .dmg
+        if let asset = target.assets?.first(where: { $0.name.hasSuffix(".zip") }) ??
+                       target.assets?.first(where: { $0.name.hasSuffix(".dmg") }),
            let downloadURL = URL(string: asset.browserDownloadUrl) {
             startDownload(url: downloadURL, filename: asset.name)
         } else {
@@ -218,18 +219,98 @@ class UpdateService: ObservableObject {
                     }
 
                     try FileManager.default.moveItem(at: tempURL, to: destinationURL)
-                    NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
 
-                    self.showAlert(
-                        title: "Download Complete",
-                        message: "The update has been downloaded to your Downloads folder: \(filename)"
-                    )
+                    if filename.hasSuffix(".zip") {
+                        self.promptInstallAndRelaunch(zipURL: destinationURL)
+                    } else {
+                        NSWorkspace.shared.activateFileViewerSelecting([destinationURL])
+                        self.showAlert(
+                            title: "Download Complete",
+                            message: "The update has been downloaded to your Downloads folder: \(filename)"
+                        )
+                    }
                 } catch {
                     self.showAlert(title: "Save Failed", message: error.localizedDescription)
                 }
             }
         }
         task.resume()
+    }
+
+    private func promptInstallAndRelaunch(zipURL: URL) {
+        let alert = NSAlert()
+        alert.messageText = "Update Downloaded"
+        alert.informativeText = "Smurfbar update (\(zipURL.lastPathComponent)) is ready. Would you like to install and relaunch now?"
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Install & Relaunch")
+        alert.addButton(withTitle: "Show in Finder")
+        alert.addButton(withTitle: "Later")
+
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            installAndRelaunch(zipURL: zipURL)
+        } else if response == .alertSecondButtonReturn {
+            NSWorkspace.shared.activateFileViewerSelecting([zipURL])
+        }
+    }
+
+    private func installAndRelaunch(zipURL: URL) {
+        let tempExtractDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        do {
+            try FileManager.default.createDirectory(at: tempExtractDir, withIntermediateDirectories: true)
+
+            // Extract archive using ditto
+            let ditto = Process()
+            ditto.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+            ditto.arguments = ["-x", "-k", zipURL.path, tempExtractDir.path]
+            try ditto.run()
+            ditto.waitUntilExit()
+
+            // Find .app inside tempExtractDir
+            let contents = try FileManager.default.contentsOfDirectory(at: tempExtractDir, includingPropertiesForKeys: nil)
+            guard let newAppURL = contents.first(where: { $0.pathExtension == "app" }) else {
+                showAlert(title: "Installation Failed", message: "Could not find Smurfbar.app inside downloaded archive.")
+                return
+            }
+
+            // Determine target installation path
+            let currentBundlePath = Bundle.main.bundleURL.path
+            let targetPath: String
+            if currentBundlePath.hasPrefix("/Applications") {
+                targetPath = currentBundlePath
+            } else {
+                targetPath = "/Applications/Smurfbar.app"
+            }
+
+            let pid = ProcessInfo.processInfo.processIdentifier
+            let script = """
+            while kill -0 \(pid) 2>/dev/null; do sleep 0.2; done
+            rm -rf "\(targetPath)"
+            cp -R "\(newAppURL.path)" "\(targetPath)"
+            rm -rf "\(tempExtractDir.path)"
+            open "\(targetPath)"
+            """
+
+            let scriptURL = tempExtractDir.appendingPathComponent("update.sh")
+            try script.write(to: scriptURL, atomically: true, encoding: .utf8)
+
+            let chmod = Process()
+            chmod.executableURL = URL(fileURLWithPath: "/bin/chmod")
+            chmod.arguments = ["+x", scriptURL.path]
+            try chmod.run()
+            chmod.waitUntilExit()
+
+            let launcher = Process()
+            launcher.executableURL = URL(fileURLWithPath: "/bin/sh")
+            launcher.arguments = [scriptURL.path]
+            try launcher.run()
+
+            // Restore dock and terminate so update script can swap and launch
+            DockService.shared.restoreDock()
+            NSApp.terminate(nil)
+        } catch {
+            showAlert(title: "Installation Failed", message: "Failed to install update: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - Alerts

@@ -14,11 +14,57 @@ struct TaskbarContentView: View {
     @State private var isTrayHovered: Bool = false
     @State private var isShowDesktopHovered: Bool = false
     @State private var isDesktopShown: Bool = false
+    @State private var contentAppsWidth: CGFloat = 0
 
     private let clockTimer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
 
     private var visibleItems: [TaskbarItem] {
         appMonitor.taskbarItems(for: screen)
+    }
+
+    private var isAppsOverflowing: Bool {
+        guard prefs.showOverflowArrows else { return false }
+        let currentScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
+        let screenWidth = currentScreen?.frame.width ?? 1440
+
+        // Space taken by widgets & system area
+        var reservedWidth: CGFloat = 40 // Start button
+        if currentScreen != nil {
+            switch prefs.searchStyle {
+            case .searchBox: reservedWidth += 170
+            case .iconOnly: reservedWidth += 40
+            case .hidden: break
+            }
+        }
+        if prefs.showWeatherWidget {
+            reservedWidth += prefs.compactMode ? 80 : 130
+        }
+        reservedWidth += 20 // Divider
+
+        if prefs.showSystemGlance {
+            reservedWidth += 75
+        }
+        if prefs.hasSystemTrayIcons {
+            reservedWidth += 85
+        }
+        if prefs.showClock {
+            reservedWidth += 90
+        }
+        if prefs.showDesktopPeek {
+            reservedWidth += 15
+        }
+        reservedWidth += 40 // Margins
+
+        let availableSpace = max(150, screenWidth - reservedWidth)
+
+        if contentAppsWidth > 0 {
+            return contentAppsWidth > availableSpace
+        }
+
+        // Fallback estimate: 46px per icon button, 140px per labeled/ungrouped button
+        let tileWidth: CGFloat = (prefs.showAppLabels || prefs.windowGroupingMode == .neverCombine) ? 140 : 46
+        let estimatedTotal = CGFloat(visibleItems.count) * tileWidth
+        return estimatedTotal > availableSpace
     }
 
     var body: some View {
@@ -47,6 +93,9 @@ struct TaskbarContentView: View {
                     PreferencesWindowController.shared.showPreferences()
                 }
             }
+
+            // Weather widget (Windows 11 glance)
+            WeatherWidgetView(screen: screen)
 
             Divider()
                 .frame(height: prefs.compactMode ? 22 : 28)
@@ -110,29 +159,37 @@ struct TaskbarContentView: View {
 
             Spacer()
 
-            Divider()
-                .frame(width: prefs.compactMode ? 28 : 34)
+            if prefs.showWeatherWidget || prefs.showSystemGlance || prefs.hasSystemTrayIcons || prefs.showClock {
+                Divider()
+                    .frame(width: prefs.compactMode ? 28 : 34)
+            }
 
-            // System Glance widget & tray buttons in vertical stack
+            // Weather widget, System Glance & tray buttons in vertical stack
+            WeatherWidgetView(screen: screen)
+
             SystemGlanceWidget()
 
-            systemTrayButtons
+            if prefs.hasSystemTrayIcons {
+                systemTrayButtons
+            }
 
             // Compact Clock
-            Button(action: {
-                let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
-                if let targetScreen = targetScreen {
-                    CalendarWindowController.shared.toggle(relativeTo: targetScreen)
+            if prefs.showClock {
+                Button(action: {
+                    let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
+                    if let targetScreen = targetScreen {
+                        CalendarWindowController.shared.toggle(relativeTo: targetScreen)
+                    }
+                }) {
+                    Text(compactTimeString(from: currentDate))
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundColor(.primary)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
                 }
-            }) {
-                Text(compactTimeString(from: currentDate))
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
+                .buttonStyle(.plain)
+                .padding(.bottom, 6)
             }
-            .buttonStyle(.plain)
-            .padding(.bottom, 6)
         }
         .frame(width: prefs.taskbarThickness)
     }
@@ -142,7 +199,7 @@ struct TaskbarContentView: View {
     private var horizontalAppsSection: some View {
         ScrollViewReader { proxy in
             HStack(spacing: 2) {
-                if prefs.showOverflowArrows && visibleItems.count > 8 {
+                if isAppsOverflowing {
                     Button(action: {
                         if let first = visibleItems.first {
                             withAnimation(.easeInOut(duration: 0.2)) {
@@ -181,9 +238,17 @@ struct TaskbarContentView: View {
                         }
                     }
                     .padding(.horizontal, 4)
+                    .background(
+                        GeometryReader { geo in
+                            Color.clear.preference(
+                                key: TaskbarAppListWidthKey.self,
+                                value: geo.size.width
+                            )
+                        }
+                    )
                 }
 
-                if prefs.showOverflowArrows && visibleItems.count > 8 {
+                if isAppsOverflowing {
                     Button(action: {
                         if let last = visibleItems.last {
                             withAnimation(.easeInOut(duration: 0.2)) {
@@ -200,6 +265,11 @@ struct TaskbarContentView: View {
                     }
                     .buttonStyle(.plain)
                     .help("Scroll to end")
+                }
+            }
+            .onPreferenceChange(TaskbarAppListWidthKey.self) { measuredWidth in
+                if measuredWidth > 0 {
+                    contentAppsWidth = measuredWidth
                 }
             }
         }
@@ -228,37 +298,47 @@ struct TaskbarContentView: View {
 
     private var systemArea: some View {
         HStack(spacing: 6) {
-            Divider()
-                .frame(height: prefs.compactMode ? 20 : 26)
+            if prefs.hasSystemTrayIcons || prefs.showClock {
+                Divider()
+                    .frame(height: prefs.compactMode ? 20 : 26)
+            }
 
             // System Tray Indicators (Wi-Fi, Volume, Battery)
-            systemTrayButtons
-
-            Divider()
-                .frame(height: prefs.compactMode ? 18 : 22)
+            if prefs.hasSystemTrayIcons {
+                systemTrayButtons
+            }
 
             // Interactive Clock Button
-            Button(action: {
-                print("🟢 Clock button CLICKED!")
-                let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
-                if let targetScreen = targetScreen {
-                    CalendarWindowController.shared.toggle(relativeTo: targetScreen)
+            if prefs.showClock {
+                if prefs.hasSystemTrayIcons {
+                    Divider()
+                        .frame(height: prefs.compactMode ? 18 : 22)
                 }
-            }) {
-                Text(timeString(from: currentDate))
-                    .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(.primary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 4)
-                    .background(isClockHovered ? Color.primary.opacity(0.08) : Color.clear)
-                    .clipShape(RoundedRectangle(cornerRadius: 4))
+
+                Button(action: {
+                    print("🟢 Clock button CLICKED!")
+                    let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
+                    if let targetScreen = targetScreen {
+                        CalendarWindowController.shared.toggle(relativeTo: targetScreen)
+                    }
+                }) {
+                    Text(timeString(from: currentDate))
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundColor(.primary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 4)
+                        .background(isClockHovered ? Color.primary.opacity(0.08) : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
+                }
+                .buttonStyle(.plain)
+                .help(dateString(from: currentDate))
+                .onHover { isClockHovered = $0 }
             }
-            .buttonStyle(.plain)
-            .help(dateString(from: currentDate))
-            .onHover { isClockHovered = $0 }
 
             // Show Desktop Peek Strip (Far Right Edge)
-            showDesktopStrip
+            if prefs.showDesktopPeek {
+                showDesktopStrip
+            }
         }
         .padding(.trailing, 2)
     }
@@ -274,24 +354,30 @@ struct TaskbarContentView: View {
         }) {
             HStack(spacing: 6) {
                 // Wi-Fi Icon
-                Image(systemName: systemStatus.wifi.iconName)
-                    .font(.system(size: 11))
-                    .foregroundColor(systemStatus.wifi.isConnected ? .primary : .secondary)
+                if prefs.showWifiStatus {
+                    Image(systemName: systemStatus.wifi.iconName)
+                        .font(.system(size: 11))
+                        .foregroundColor(systemStatus.wifi.isConnected ? .primary : .secondary)
+                }
 
                 // Volume Icon
-                Image(systemName: volumeTrayIconName)
-                    .font(.system(size: 11))
-                    .foregroundColor(systemStatus.isMuted ? .secondary : .primary)
+                if prefs.showVolumeControl {
+                    Image(systemName: volumeTrayIconName)
+                        .font(.system(size: 11))
+                        .foregroundColor(systemStatus.isMuted ? .secondary : .primary)
+                }
 
                 // Battery Icon & Percentage
-                HStack(spacing: 3) {
-                    Image(systemName: systemStatus.battery.iconName)
-                        .font(.system(size: 11))
-                        .foregroundColor(systemStatus.battery.percentage < 20 ? .red : .primary)
-                    if systemStatus.battery.hasBattery {
-                        Text("\(systemStatus.battery.percentage)%")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundColor(.primary)
+                if prefs.showBatteryStatus {
+                    HStack(spacing: 3) {
+                        Image(systemName: systemStatus.battery.iconName)
+                            .font(.system(size: 11))
+                            .foregroundColor(systemStatus.battery.percentage < 20 ? .red : .primary)
+                        if systemStatus.battery.hasBattery {
+                            Text("\(systemStatus.battery.percentage)%")
+                                .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                .foregroundColor(.primary)
+                        }
                     }
                 }
             }
@@ -404,5 +490,13 @@ struct TaskbarContentView: View {
             on: screen,
             isHovering: hovering
         )
+    }
+}
+
+/// PreferenceKey to measure actual intrinsic width of all app tiles combined
+private struct TaskbarAppListWidthKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

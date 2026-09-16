@@ -103,6 +103,14 @@ struct AppTileView: View {
 
     // MARK: - Subviews
 
+    private var hasNotification: Bool {
+        badgeService.hasNotification(for: item.bundleIdentifier)
+    }
+
+    private var needsAttention: Bool {
+        badgeService.needsAttention(for: item.bundleIdentifier, pid: app.pid)
+    }
+
     @ViewBuilder
     private var indicatorBar: some View {
         if isActive {
@@ -111,7 +119,19 @@ struct AppTileView: View {
                 .frame(height: 2)
                 .padding(.horizontal, 8)
                 .padding(prefs.taskbarPosition == .top ? .top : .bottom, 1)
-        } else if app.isRunning {
+        } else if prefs.runningIndicatorMode != .never && needsAttention {
+            Circle()
+                .fill(Color.orange)
+                .frame(width: 5, height: 5)
+                .shadow(color: Color.orange.opacity(0.6), radius: 2)
+                .padding(prefs.taskbarPosition == .top ? .top : .bottom, 2)
+        } else if prefs.runningIndicatorMode != .never && hasNotification {
+            Circle()
+                .fill(Color.red)
+                .frame(width: 5, height: 5)
+                .shadow(color: Color.red.opacity(0.6), radius: 2)
+                .padding(prefs.taskbarPosition == .top ? .top : .bottom, 2)
+        } else if prefs.runningIndicatorMode == .always && app.isRunning {
             Circle()
                 .fill(Color.secondary.opacity(0.5))
                 .frame(width: 4, height: 4)

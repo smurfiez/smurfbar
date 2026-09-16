@@ -6,12 +6,18 @@ struct PreferencesView: View {
     @ObservedObject var pinnedService = PinnedAppsService.shared
     @ObservedObject var screenCaptureService = ScreenCaptureService.shared
     @ObservedObject var updateService = UpdateService.shared
+    @ObservedObject var weatherService = WeatherService.shared
 
     var body: some View {
         TabView {
             generalTab
                 .tabItem {
                     Label("General", systemImage: "gearshape")
+                }
+
+            widgetsTab
+                .tabItem {
+                    Label("Widgets & Tray", systemImage: "slider.horizontal.below.rectangle")
                 }
 
             appearanceTab
@@ -29,7 +35,7 @@ struct PreferencesView: View {
                     Label("About", systemImage: "info.circle")
                 }
         }
-        .frame(width: 520, height: 460)
+        .frame(width: 530, height: 500)
         .padding()
         .onAppear {
             screenCaptureService.checkPermission()
@@ -53,14 +59,18 @@ struct PreferencesView: View {
                 Toggle("Show Application Name Labels", isOn: $prefs.showAppLabels)
                     .help("Display application names alongside icons in the taskbar")
 
+                Picker("Indicator Dots", selection: $prefs.runningIndicatorMode) {
+                    ForEach(RunningIndicatorMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .help("Choose when indicator dots appear below application names: only when an app has notifications/needs attention, always for running apps, or never")
+
                 Toggle("Show Live Window Previews", isOn: $prefs.showWindowPreviews)
                     .help("Display window thumbnails when hovering over application tiles")
 
                 Toggle("Enable Window Snapping (Aero Snap)", isOn: $prefs.enableWindowSnapping)
                     .help("Drag windows to screen edges or use Ctrl+Arrow to tile windows")
-
-                Toggle("Show System Resource Glance", isOn: $prefs.showSystemGlance)
-                    .help("Display mini CPU and RAM usage meter in the system tray")
             }
 
             Section(header: Text("Grouping & Search")) {
@@ -84,6 +94,66 @@ struct PreferencesView: View {
                     }
                 }
                 .pickerStyle(.segmented)
+            }
+        }
+        .padding(16)
+    }
+
+    private var widgetsTab: some View {
+        Form {
+            Section(header: Text("Weather Widget (Windows 11 Glance)")) {
+                Toggle("Show Weather Widget", isOn: $prefs.showWeatherWidget)
+                    .help("Display real-time weather icon, temperature, and description on the taskbar")
+
+                if prefs.showWeatherWidget {
+                    Picker("Temperature Unit", selection: $prefs.weatherUnit) {
+                        ForEach(WeatherUnit.allCases) { unit in
+                            Text(unit.title).tag(unit)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+
+                    Picker("Location Detection", selection: $prefs.weatherLocationMode) {
+                        ForEach(WeatherLocationMode.allCases) { mode in
+                            Text(mode.title).tag(mode)
+                        }
+                    }
+
+                    if prefs.weatherLocationMode == .manual {
+                        HStack {
+                            TextField("City name (e.g. Tokyo, London)", text: $prefs.weatherCustomCity)
+                                .textFieldStyle(.roundedBorder)
+
+                            Button("Update") {
+                                weatherService.fetchWeather()
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section(header: Text("Resource Monitor (System Glance)")) {
+                Toggle("Show Resource Monitor (CPU & RAM)", isOn: $prefs.showSystemGlance)
+                    .help("Display mini live CPU and RAM usage gauge in the system tray")
+            }
+
+            Section(header: Text("System Tray Indicators")) {
+                Toggle("Show Volume & Audio Control", isOn: $prefs.showVolumeControl)
+                    .help("Display volume speaker icon in the system tray")
+
+                Toggle("Show Network (Wi-Fi) Status", isOn: $prefs.showWifiStatus)
+                    .help("Display Wi-Fi signal icon in the system tray")
+
+                Toggle("Show Battery Status", isOn: $prefs.showBatteryStatus)
+                    .help("Display battery percentage and charge icon in the system tray")
+            }
+
+            Section(header: Text("Date, Time & Desktop")) {
+                Toggle("Show Clock & Time Display", isOn: $prefs.showClock)
+                    .help("Display current time on the taskbar (clicking opens calendar flyout)")
+
+                Toggle("Show Desktop Peek Button", isOn: $prefs.showDesktopPeek)
+                    .help("Display thin sliver button on the far edge to show the desktop")
             }
         }
         .padding(16)

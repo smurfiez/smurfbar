@@ -39,6 +39,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 8. Initialize update service (triggers auto-check if enabled)
         _ = UpdateService.shared
 
+        // 9. Initialize weather service (loads current weather if enabled)
+        _ = WeatherService.shared
+
         print("✅ Smurfbar launched successfully")
     }
 

@@ -1,0 +1,59 @@
+name: Release Smurfbar
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'Tag name for this release (e.g. v0.5.0)'
+        required: true
+        default: 'v0.5.0'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Publish Release
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select Xcode Version
+        run: |
+          echo "Selecting latest Xcode available..."
+          if [ -d "/Applications/Xcode_15.4.app" ]; then
+            sudo xcode-select -switch /Applications/Xcode_15.4.app
+          elif [ -d "/Applications/Xcode_16.app" ]; then
+            sudo xcode-select -switch /Applications/Xcode_16.app
+          fi
+          xcodebuild -version
+          swift --version
+
+      - name: Build & Package Release Artifacts
+        run: |
+          chmod +x ./Scripts/build.sh ./Scripts/create_dmg.sh ./Scripts/package.sh
+          ./Scripts/package.sh
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name || github.ref_name }}
+          name: Smurfbar ${{ github.event.inputs.tag_name || github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            .build/Smurfbar-*.dmg
+            .build/Smurfbar-*.zip
+            .build/Smurfbar.dmg
+            .build/Smurfbar.zip
+            .build/checksums.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

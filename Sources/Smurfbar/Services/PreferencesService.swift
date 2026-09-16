@@ -100,6 +100,15 @@ enum MultiMonitorMode: String, CaseIterable, Identifiable, Codable {
     var id: String { rawValue }
 }
 
+/// Running indicator dot display mode
+enum RunningIndicatorMode: String, CaseIterable, Identifiable, Codable {
+    case notificationsAndAttention = "Notifications & Attention Only"
+    case always = "Always (All Running Apps)"
+    case never = "Never"
+
+    var id: String { rawValue }
+}
+
 /// Service managing user settings and preferences.
 class PreferencesService: ObservableObject {
     static let shared = PreferencesService()
@@ -123,6 +132,16 @@ class PreferencesService: ObservableObject {
     private let keySearchStyle = "Smurfbar_SearchStyle"
     private let keyShowSystemGlance = "Smurfbar_ShowSystemGlance"
     private let keyAutoCheckUpdates = "Smurfbar_AutoCheckUpdates"
+    private let keyShowWeatherWidget = "Smurfbar_ShowWeatherWidget"
+    private let keyWeatherUnit = "Smurfbar_WeatherUnit"
+    private let keyWeatherLocationMode = "Smurfbar_WeatherLocationMode"
+    private let keyWeatherCustomCity = "Smurfbar_WeatherCustomCity"
+    private let keyShowClock = "Smurfbar_ShowClock"
+    private let keyShowVolumeControl = "Smurfbar_ShowVolumeControl"
+    private let keyShowWifiStatus = "Smurfbar_ShowWifiStatus"
+    private let keyShowBatteryStatus = "Smurfbar_ShowBatteryStatus"
+    private let keyShowDesktopPeek = "Smurfbar_ShowDesktopPeek"
+    private let keyRunningIndicatorMode = "Smurfbar_RunningIndicatorMode"
 
     @Published var autoHide: Bool {
         didSet { defaults.set(autoHide, forKey: keyAutoHide) }
@@ -142,6 +161,10 @@ class PreferencesService: ObservableObject {
 
     @Published var showAppLabels: Bool {
         didSet { defaults.set(showAppLabels, forKey: keyShowAppLabels) }
+    }
+
+    @Published var runningIndicatorMode: RunningIndicatorMode {
+        didSet { defaults.set(runningIndicatorMode.rawValue, forKey: keyRunningIndicatorMode) }
     }
 
     @Published var taskbarPosition: TaskbarPosition {
@@ -188,6 +211,46 @@ class PreferencesService: ObservableObject {
         didSet { defaults.set(autoCheckUpdates, forKey: keyAutoCheckUpdates) }
     }
 
+    @Published var showWeatherWidget: Bool {
+        didSet { defaults.set(showWeatherWidget, forKey: keyShowWeatherWidget) }
+    }
+
+    @Published var weatherUnit: WeatherUnit {
+        didSet { defaults.set(weatherUnit.rawValue, forKey: keyWeatherUnit) }
+    }
+
+    @Published var weatherLocationMode: WeatherLocationMode {
+        didSet { defaults.set(weatherLocationMode.rawValue, forKey: keyWeatherLocationMode) }
+    }
+
+    @Published var weatherCustomCity: String {
+        didSet { defaults.set(weatherCustomCity, forKey: keyWeatherCustomCity) }
+    }
+
+    @Published var showClock: Bool {
+        didSet { defaults.set(showClock, forKey: keyShowClock) }
+    }
+
+    @Published var showVolumeControl: Bool {
+        didSet { defaults.set(showVolumeControl, forKey: keyShowVolumeControl) }
+    }
+
+    @Published var showWifiStatus: Bool {
+        didSet { defaults.set(showWifiStatus, forKey: keyShowWifiStatus) }
+    }
+
+    @Published var showBatteryStatus: Bool {
+        didSet { defaults.set(showBatteryStatus, forKey: keyShowBatteryStatus) }
+    }
+
+    @Published var showDesktopPeek: Bool {
+        didSet { defaults.set(showDesktopPeek, forKey: keyShowDesktopPeek) }
+    }
+
+    var hasSystemTrayIcons: Bool {
+        showVolumeControl || showWifiStatus || showBatteryStatus
+    }
+
     @Published var launchAtLogin: Bool {
         didSet {
             setLaunchAtLogin(launchAtLogin)
@@ -209,6 +272,8 @@ class PreferencesService: ObservableObject {
         self.showWindowPreviews = defaults.object(forKey: keyShowPreviews) == nil ? true : defaults.bool(forKey: keyShowPreviews)
         self.compactMode = defaults.bool(forKey: keyCompactMode)
         self.showAppLabels = defaults.object(forKey: keyShowAppLabels) == nil ? true : defaults.bool(forKey: keyShowAppLabels)
+        let indicatorRaw = defaults.string(forKey: keyRunningIndicatorMode) ?? RunningIndicatorMode.notificationsAndAttention.rawValue
+        self.runningIndicatorMode = RunningIndicatorMode(rawValue: indicatorRaw) ?? .notificationsAndAttention
 
         let posRaw = defaults.string(forKey: keyTaskbarPosition) ?? TaskbarPosition.bottom.rawValue
         self.taskbarPosition = TaskbarPosition(rawValue: posRaw) ?? .bottom
@@ -237,6 +302,22 @@ class PreferencesService: ObservableObject {
         self.showSystemGlance = defaults.object(forKey: keyShowSystemGlance) == nil ? true : defaults.bool(forKey: keyShowSystemGlance)
 
         self.autoCheckUpdates = defaults.object(forKey: keyAutoCheckUpdates) == nil ? true : defaults.bool(forKey: keyAutoCheckUpdates)
+
+        self.showWeatherWidget = defaults.object(forKey: keyShowWeatherWidget) == nil ? true : defaults.bool(forKey: keyShowWeatherWidget)
+
+        let unitRaw = defaults.string(forKey: keyWeatherUnit) ?? WeatherUnit.celsius.rawValue
+        self.weatherUnit = WeatherUnit(rawValue: unitRaw) ?? .celsius
+
+        let locModeRaw = defaults.string(forKey: keyWeatherLocationMode) ?? WeatherLocationMode.automatic.rawValue
+        self.weatherLocationMode = WeatherLocationMode(rawValue: locModeRaw) ?? .automatic
+
+        self.weatherCustomCity = defaults.string(forKey: keyWeatherCustomCity) ?? "San Francisco"
+
+        self.showClock = defaults.object(forKey: keyShowClock) == nil ? true : defaults.bool(forKey: keyShowClock)
+        self.showVolumeControl = defaults.object(forKey: keyShowVolumeControl) == nil ? true : defaults.bool(forKey: keyShowVolumeControl)
+        self.showWifiStatus = defaults.object(forKey: keyShowWifiStatus) == nil ? true : defaults.bool(forKey: keyShowWifiStatus)
+        self.showBatteryStatus = defaults.object(forKey: keyShowBatteryStatus) == nil ? true : defaults.bool(forKey: keyShowBatteryStatus)
+        self.showDesktopPeek = defaults.object(forKey: keyShowDesktopPeek) == nil ? true : defaults.bool(forKey: keyShowDesktopPeek)
 
         if #available(macOS 13.0, *) {
             self.launchAtLogin = (SMAppService.mainApp.status == .enabled)

@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Show Toolchain
+        run: |
+          swift --version
+          xcodebuild -version
+
+      - name: Build Debug
+        run: swift build -v
+
+      - name: Build Release Bundle
+        run: |
+          chmod +x ./Scripts/build.sh
+          ./Scripts/build.sh
