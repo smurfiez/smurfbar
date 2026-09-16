@@ -21,7 +21,7 @@ class AppActionService {
             if app.isHidden {
                 nsApp.unhide()
             }
-            nsApp.activate()
+            nsApp.activate(options: .activateIgnoringOtherApps)
         }
     }
 
@@ -34,7 +34,7 @@ class AppActionService {
         if app.isHidden {
             nsApp.unhide()
         }
-        nsApp.activate()
+        nsApp.activate(options: .activateIgnoringOtherApps)
     }
 
     /// Launch a non-running app
@@ -116,6 +116,26 @@ class AppActionService {
     func showInFinder(_ app: RunningApp) {
         if let url = app.bundleURL {
             NSWorkspace.shared.activateFileViewerSelecting([url])
+        }
+    }
+
+    /// Open a new window for the given application (Jump List task)
+    func openNewWindow(for app: RunningApp) {
+        activateApp(app)
+        let script = "tell application \"System Events\" to tell process \"\(app.localizedName)\" to keystroke \"n\" using command down"
+        DispatchQueue.global(qos: .userInitiated).async {
+            var error: NSDictionary?
+            NSAppleScript(source: script)?.executeAndReturnError(&error)
+        }
+    }
+
+    /// Open a new private/incognito window for browsers
+    func openNewPrivateWindow(for app: RunningApp) {
+        activateApp(app)
+        let script = "tell application \"System Events\" to tell process \"\(app.localizedName)\" to keystroke \"n\" using {command down, shift down}"
+        DispatchQueue.global(qos: .userInitiated).async {
+            var error: NSDictionary?
+            NSAppleScript(source: script)?.executeAndReturnError(&error)
         }
     }
 }

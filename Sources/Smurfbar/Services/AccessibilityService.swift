@@ -78,7 +78,7 @@ class AccessibilityService {
 
         // Fallback: if there's only 1 window or no match, activate app
         if let app = NSRunningApplication(processIdentifier: pid) {
-            app.activate()
+            app.activate(options: .activateIgnoringOtherApps)
         }
         return false
     }
@@ -96,7 +96,7 @@ class AccessibilityService {
 
         // Activate the application
         if let app = NSRunningApplication(processIdentifier: pid) {
-            app.activate()
+            app.activate(options: .activateIgnoringOtherApps)
         }
     }
 

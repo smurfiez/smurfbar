@@ -39,6 +39,10 @@ class StatusBarController {
         aboutItem.target = self
         menu.addItem(aboutItem)
 
+        let updateItem = NSMenuItem(title: "Check for Updates...", action: #selector(checkForUpdates), keyEquivalent: "")
+        updateItem.target = self
+        menu.addItem(updateItem)
+
         menu.addItem(.separator())
 
         let toggleItem = NSMenuItem(title: "Toggle Taskbar", action: #selector(toggleTaskbar), keyEquivalent: "t")
@@ -70,10 +74,14 @@ class StatusBarController {
     @objc private func showAbout() {
         let alert = NSAlert()
         alert.messageText = "Smurfbar"
-        alert.informativeText = "A Windows-style taskbar and desktop manager for macOS.\n\nVersion 0.4.0 (Phase 4)"
+        alert.informativeText = "A Windows-style taskbar and desktop manager for macOS.\n\nVersion 0.5.0 (Phase 5)"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.runModal()
+    }
+
+    @objc private func checkForUpdates() {
+        UpdateService.shared.checkForUpdates(manual: true)
     }
 
     @objc private func toggleTaskbar() {

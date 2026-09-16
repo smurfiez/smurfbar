@@ -234,10 +234,12 @@ class SystemStatusService: ObservableObject {
     // MARK: - Bluetooth Status & Control
 
     private func refreshBluetooth() {
-        if let controller = IOBluetoothHostController.default() {
-            let powerOn = (controller.powerState == kBluetoothHCIPowerStateON)
-            DispatchQueue.main.async {
-                self.isBluetoothOn = powerOn
+        DispatchQueue.global(qos: .utility).async {
+            if let controller = IOBluetoothHostController.default() {
+                let powerOn = (controller.powerState == kBluetoothHCIPowerStateON)
+                DispatchQueue.main.async {
+                    self.isBluetoothOn = powerOn
+                }
             }
         }
     }
@@ -290,9 +292,20 @@ class SystemStatusService: ObservableObject {
     // MARK: - Media Playback
 
     private func refreshMedia() {
-        let mediaScript = """
-        if application "Music" is running then
-            tell application "Music"
+        let isMusicRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music").isEmpty
+        let isSpotifyRunning = !NSRunningApplication.runningApplications(withBundleIdentifier: "com.spotify.client").isEmpty
+
+        guard isMusicRunning || isSpotifyRunning else {
+            DispatchQueue.main.async {
+                self.media = MediaStatus(isPlaying: false, trackTitle: "", artistName: "", appName: "", isAvailable: false)
+            }
+            return
+        }
+
+        let mediaScript: String
+        if isMusicRunning {
+            mediaScript = """
+            tell application id "com.apple.Music"
                 set pState to player state as string
                 if pState is "playing" then
                     set tName to name of current track
@@ -300,9 +313,11 @@ class SystemStatusService: ObservableObject {
                     return "Music|||" & pState & "|||" & tName & "|||" & aName
                 end if
             end tell
-        end if
-        if application "Spotify" is running then
-            tell application "Spotify"
+            return "none"
+            """
+        } else {
+            mediaScript = """
+            tell application id "com.spotify.client"
                 set pState to player state as string
                 if pState is "playing" then
                     set tName to name of current track
@@ -310,9 +325,9 @@ class SystemStatusService: ObservableObject {
                     return "Spotify|||" & pState & "|||" & tName & "|||" & aName
                 end if
             end tell
-        end if
-        return "none"
-        """
+            return "none"
+            """
+        }
 
         DispatchQueue.global(qos: .utility).async {
             guard let appleScript = NSAppleScript(source: mediaScript) else { return }
@@ -340,24 +355,33 @@ class SystemStatusService: ObservableObject {
     }
 
     func togglePlayPause() {
-        let app = media.appName.isEmpty ? "Music" : media.appName
-        runAppleScript("tell application \"\(app)\" to playpause")
+        if media.appName == "Spotify" || (!NSRunningApplication.runningApplications(withBundleIdentifier: "com.spotify.client").isEmpty && media.appName.isEmpty) {
+            runAppleScript("tell application id \"com.spotify.client\" to playpause")
+        } else if !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music").isEmpty {
+            runAppleScript("tell application id \"com.apple.Music\" to playpause")
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             self.refreshMedia()
         }
     }
 
     func nextTrack() {
-        let app = media.appName.isEmpty ? "Music" : media.appName
-        runAppleScript("tell application \"\(app)\" to next track")
+        if media.appName == "Spotify" {
+            runAppleScript("tell application id \"com.spotify.client\" to next track")
+        } else if !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music").isEmpty {
+            runAppleScript("tell application id \"com.apple.Music\" to next track")
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             self.refreshMedia()
         }
     }
 
     func previousTrack() {
-        let app = media.appName.isEmpty ? "Music" : media.appName
-        runAppleScript("tell application \"\(app)\" to previous track")
+        if media.appName == "Spotify" {
+            runAppleScript("tell application id \"com.spotify.client\" to previous track")
+        } else if !NSRunningApplication.runningApplications(withBundleIdentifier: "com.apple.Music").isEmpty {
+            runAppleScript("tell application id \"com.apple.Music\" to previous track")
+        }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             self.refreshMedia()
         }

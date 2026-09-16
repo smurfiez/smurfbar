@@ -100,13 +100,19 @@ class TaskbarWindowController {
         let setWorkspaceRect = unsafeBitCast(cgsSetRectSym, to: CGSSetWorkspaceRectFunc.self)
         let cid = getMainConn()
 
-        let height = PreferencesService.shared.taskbarHeight
+        let thickness = PreferencesService.shared.taskbarThickness
         var rect = screen.frame
-        if PreferencesService.shared.taskbarPosition == .top {
-            rect.size.height -= height
-        } else {
-            rect.origin.y += height
-            rect.size.height -= height
+        switch PreferencesService.shared.taskbarPosition {
+        case .top:
+            rect.size.height -= thickness
+        case .bottom:
+            rect.origin.y += thickness
+            rect.size.height -= thickness
+        case .left:
+            rect.origin.x += thickness
+            rect.size.width -= thickness
+        case .right:
+            rect.size.width -= thickness
         }
 
         _ = setWorkspaceRect(cid, rect)

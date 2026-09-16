@@ -224,4 +224,56 @@ class AppMonitor: ObservableObject {
             }
         }
     }
+
+    /// Returns taskbar items according to screen and user's WindowGroupingMode preference
+    func taskbarItems(for screen: NSScreen?) -> [TaskbarItem] {
+        let baseApps = apps(for: screen)
+        let mode = PreferencesService.shared.windowGroupingMode
+
+        switch mode {
+        case .alwaysCombine:
+            return baseApps.map { TaskbarItem(app: $0) }
+
+        case .neverCombine:
+            var items: [TaskbarItem] = []
+            for app in baseApps {
+                let relevantWindows: [AppWindow]
+                if let scr = screen {
+                    relevantWindows = app.windows.filter { scr.frame.intersects($0.bounds) }
+                } else {
+                    relevantWindows = app.windows
+                }
+
+                if relevantWindows.isEmpty {
+                    // App has no open windows (or is pinned / background), render single app item
+                    items.append(TaskbarItem(app: app))
+                } else {
+                    // Each window gets its own item
+                    for win in relevantWindows {
+                        items.append(TaskbarItem(app: app, window: win))
+                    }
+                }
+            }
+            return items
+
+        case .combineWhenFull:
+            // If total ungrouped items would exceed 10, combine
+            let totalWindows = baseApps.reduce(0) { $0 + max(1, $1.windows.count) }
+            if totalWindows > 10 {
+                return baseApps.map { TaskbarItem(app: $0) }
+            } else {
+                var items: [TaskbarItem] = []
+                for app in baseApps {
+                    if app.windows.isEmpty {
+                        items.append(TaskbarItem(app: app))
+                    } else {
+                        for win in app.windows {
+                            items.append(TaskbarItem(app: app, window: win))
+                        }
+                    }
+                }
+                return items
+            }
+        }
+    }
 }

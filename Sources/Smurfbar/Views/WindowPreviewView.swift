@@ -16,6 +16,22 @@ struct WindowPreviewView: View {
                 Text(app.localizedName)
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.primary)
+
+                if let pid = app.pid, let metrics = AppPerformanceService.shared.getMetrics(for: pid) {
+                    HStack(spacing: 4) {
+                        Text("•")
+                            .foregroundColor(.secondary)
+                        Text(String(format: "%.1f%% CPU", metrics.cpuPercentage))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(metrics.cpuPercentage > 50 ? .orange : .secondary)
+                        Text("•")
+                            .foregroundColor(.secondary)
+                        Text(metrics.memoryString)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
                 Spacer()
                 Text("\(app.windows.count) window\(app.windows.count == 1 ? "" : "s")")
                     .font(.system(size: 10))

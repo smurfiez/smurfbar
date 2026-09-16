@@ -17,50 +17,134 @@ struct TaskbarContentView: View {
 
     private let clockTimer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
 
-    private var visibleApps: [RunningApp] {
-        if prefs.multiMonitorMode == .allMonitors {
-            return appMonitor.apps(for: screen)
-        } else {
-            return appMonitor.runningApps
-        }
+    private var visibleItems: [TaskbarItem] {
+        appMonitor.taskbarItems(for: screen)
     }
 
     var body: some View {
+        Group {
+            if prefs.taskbarPosition.isVertical {
+                verticalLayout
+            } else {
+                horizontalLayout
+            }
+        }
+        .onReceive(clockTimer) { date in
+            currentDate = date
+        }
+    }
+
+    // MARK: - Layouts
+
+    private var horizontalLayout: some View {
         HStack(spacing: 2) {
             // Smurfbar logo / Start menu button
             smurfbarButton
 
+            // Search widget
+            if let scr = screen ?? NSScreen.main ?? NSScreen.screens.first {
+                TaskbarSearchBoxView(screen: scr) {
+                    PreferencesWindowController.shared.showPreferences()
+                }
+            }
+
             Divider()
                 .frame(height: prefs.compactMode ? 22 : 28)
-                .padding(.horizontal, 4)
+                .padding(.horizontal, 3)
 
             if prefs.taskbarAlignment == .center {
                 Spacer()
             }
 
             // Running & Pinned apps with optional overflow controls
-            appsSection
+            horizontalAppsSection
 
             Spacer()
+
+            // System glance resource telemetry meter
+            SystemGlanceWidget()
 
             // System area (right side)
             systemArea
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 6)
         .frame(height: prefs.taskbarHeight)
-        .onReceive(clockTimer) { date in
-            currentDate = date
+    }
+
+    private var verticalLayout: some View {
+        VStack(spacing: 6) {
+            // Start button at top
+            smurfbarButton
+                .padding(.top, 4)
+
+            // Search button at top
+            if let scr = screen ?? NSScreen.main ?? NSScreen.screens.first {
+                TaskbarSearchBoxView(screen: scr) {
+                    PreferencesWindowController.shared.showPreferences()
+                }
+            }
+
+            Divider()
+                .frame(width: prefs.compactMode ? 28 : 34)
+
+            // Vertical apps scrollview
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 4) {
+                    ForEach(visibleItems) { item in
+                        AppTileView(
+                            item: item,
+                            isActive: item.pid != nil && item.pid == appMonitor.activeAppPID,
+                            onTap: {
+                                handleItemTap(item)
+                            },
+                            onRightClick: {},
+                            onHover: { hovering in
+                                handleAppHover(app: item.runningApp, hovering: hovering)
+                            }
+                        )
+                        .id(item.id)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+
+            Spacer()
+
+            Divider()
+                .frame(width: prefs.compactMode ? 28 : 34)
+
+            // System Glance widget & tray buttons in vertical stack
+            SystemGlanceWidget()
+
+            systemTrayButtons
+
+            // Compact Clock
+            Button(action: {
+                let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
+                if let targetScreen = targetScreen {
+                    CalendarWindowController.shared.toggle(relativeTo: targetScreen)
+                }
+            }) {
+                Text(compactTimeString(from: currentDate))
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundColor(.primary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+            }
+            .buttonStyle(.plain)
+            .padding(.bottom, 6)
         }
+        .frame(width: prefs.taskbarThickness)
     }
 
     // MARK: - Subviews
 
-    private var appsSection: some View {
+    private var horizontalAppsSection: some View {
         ScrollViewReader { proxy in
             HStack(spacing: 2) {
-                if prefs.showOverflowArrows && visibleApps.count > 8 {
+                if prefs.showOverflowArrows && visibleItems.count > 8 {
                     Button(action: {
-                        if let first = visibleApps.first {
+                        if let first = visibleItems.first {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 proxy.scrollTo(first.id, anchor: .leading)
                             }
@@ -79,29 +163,29 @@ struct TaskbarContentView: View {
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 2) {
-                        ForEach(visibleApps) { app in
+                        ForEach(visibleItems) { item in
                             AppTileView(
-                                app: app,
-                                isActive: app.pid != nil && app.pid == appMonitor.activeAppPID,
+                                item: item,
+                                isActive: item.pid != nil && item.pid == appMonitor.activeAppPID,
                                 onTap: {
-                                    handleAppTap(app)
+                                    handleItemTap(item)
                                 },
                                 onRightClick: {
                                     // Context menu is handled via SwiftUI .contextMenu
                                 },
                                 onHover: { hovering in
-                                    handleAppHover(app: app, hovering: hovering)
+                                    handleAppHover(app: item.runningApp, hovering: hovering)
                                 }
                             )
-                            .id(app.id)
+                            .id(item.id)
                         }
                     }
                     .padding(.horizontal, 4)
                 }
 
-                if prefs.showOverflowArrows && visibleApps.count > 8 {
+                if prefs.showOverflowArrows && visibleItems.count > 8 {
                     Button(action: {
-                        if let last = visibleApps.last {
+                        if let last = visibleItems.last {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 proxy.scrollTo(last.id, anchor: .trailing)
                             }
@@ -123,6 +207,7 @@ struct TaskbarContentView: View {
 
     private var smurfbarButton: some View {
         Button(action: {
+            print("🟢 Smurfbar Start button CLICKED!")
             let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
             if let targetScreen = targetScreen {
                 AppLauncherWindowController.shared.toggle(relativeTo: targetScreen) {
@@ -154,6 +239,7 @@ struct TaskbarContentView: View {
 
             // Interactive Clock Button
             Button(action: {
+                print("🟢 Clock button CLICKED!")
                 let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
                 if let targetScreen = targetScreen {
                     CalendarWindowController.shared.toggle(relativeTo: targetScreen)
@@ -271,6 +357,12 @@ struct TaskbarContentView: View {
         return formatter.string(from: date)
     }
 
+    private func compactTimeString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm\na"
+        return formatter.string(from: date)
+    }
+
     private func dateString(from date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateStyle = .full
@@ -279,6 +371,21 @@ struct TaskbarContentView: View {
     }
 
     // MARK: - Interaction Handlers
+
+    private func handleItemTap(_ item: TaskbarItem) {
+        print("🟢 App/Item CLICKED: \(item.title)")
+        WindowPreviewWindowController.shared.closePreview()
+
+        if let win = item.window {
+            AppActionService.shared.activateWindow(
+                for: item.runningApp,
+                windowTitle: win.title,
+                windowID: win.windowID
+            )
+        } else {
+            handleAppTap(item.runningApp)
+        }
+    }
 
     private func handleAppTap(_ app: RunningApp) {
         // Immediately dismiss any window preview without animation or delay

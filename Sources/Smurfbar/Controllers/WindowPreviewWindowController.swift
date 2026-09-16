@@ -1,12 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// Custom NSHostingView that handles the first click without requiring prior window activation.
-class FirstMouseHostingView<Content: View>: NSHostingView<Content> {
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
-        return true
-    }
-}
 
 /// Window controller that manages the floating window thumbnail preview popover.
 class WindowPreviewWindowController: NSWindowController {

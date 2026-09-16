@@ -1,11 +1,13 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// An individual app tile in the taskbar.
-/// Shows the app icon, name, active/running state, pin state, and handles click/drag-and-drop.
+/// An individual app or window tile in the taskbar.
+/// Shows the icon, title/labels, notification badges, active indicator, and handles Jump Lists.
 struct AppTileView: View {
+    let item: TaskbarItem
     @ObservedObject var app: RunningApp
     @ObservedObject var prefs = PreferencesService.shared
+    @ObservedObject var badgeService = NotificationBadgeService.shared
     let isActive: Bool
     let onTap: () -> Void
     let onRightClick: () -> Void
@@ -14,52 +16,81 @@ struct AppTileView: View {
     @State private var isHovered: Bool = false
     @State private var isDropTarget: Bool = false
 
-    var body: some View {
-        HStack(spacing: 6) {
-            // App icon
-            Image(nsImage: app.icon)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 24, height: 24)
+    init(item: TaskbarItem, isActive: Bool, onTap: @escaping () -> Void, onRightClick: @escaping () -> Void, onHover: ((Bool) -> Void)? = nil) {
+        self.item = item
+        self.app = item.runningApp
+        self.isActive = isActive
+        self.onTap = onTap
+        self.onRightClick = onRightClick
+        self.onHover = onHover
+    }
 
-            // App name (optional)
-            if prefs.showAppLabels {
-                Text(app.localizedName)
-                    .font(.system(size: 12, weight: isActive ? .semibold : .regular))
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .foregroundColor(isActive ? .primary : (app.isRunning ? .secondary : .secondary.opacity(0.8)))
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .frame(height: 36)
-        .background(tileBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .overlay(
-            RoundedRectangle(cornerRadius: 6)
-                .stroke(isDropTarget ? prefs.accentColorChoice.color : Color.clear, lineWidth: 2)
-        )
-        .overlay(
-            // Indicator: active accent bar or running dot (top or bottom based on taskbar position)
-            VStack {
-                if prefs.taskbarPosition == .top {
-                    indicatorBar
-                    Spacer()
-                } else {
-                    Spacer()
-                    indicatorBar
+    init(app: RunningApp, isActive: Bool, onTap: @escaping () -> Void, onRightClick: @escaping () -> Void, onHover: ((Bool) -> Void)? = nil) {
+        self.init(item: TaskbarItem(app: app), isActive: isActive, onTap: onTap, onRightClick: onRightClick, onHover: onHover)
+    }
+
+    var body: some View {
+        Button(action: {
+            onTap()
+        }) {
+            HStack(spacing: 6) {
+                // App icon with notification badge
+                ZStack(alignment: .topTrailing) {
+                    Image(nsImage: item.icon)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 24, height: 24)
+
+                    if let badge = badgeService.badge(for: item.bundleIdentifier) {
+                        Text(badge)
+                            .font(.system(size: 8, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 3)
+                            .padding(.vertical, 1)
+                            .background(Color.red)
+                            .clipShape(Capsule())
+                            .offset(x: 5, y: -4)
+                    }
+                }
+
+                // Title / Label (shown if app labels enabled or if ungrouped window button)
+                if prefs.showAppLabels || item.window != nil {
+                    Text(item.title)
+                        .font(.system(size: 12, weight: isActive ? .semibold : .regular))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .foregroundColor(isActive ? .primary : (app.isRunning ? .secondary : .secondary.opacity(0.8)))
+                        .frame(maxWidth: item.window != nil ? 140 : 110, alignment: .leading)
                 }
             }
-        )
-        .opacity(app.isHidden ? 0.5 : (app.isRunning ? 1.0 : 0.85))
-        .contentShape(Rectangle())
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .frame(height: 36)
+            .background(tileBackground)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(isDropTarget ? prefs.accentColorChoice.color : Color.clear, lineWidth: 2)
+            )
+            .overlay(
+                // Indicator: active accent bar or running dot (top or bottom based on taskbar position)
+                VStack {
+                    if prefs.taskbarPosition == .top {
+                        indicatorBar
+                        Spacer()
+                    } else {
+                        Spacer()
+                        indicatorBar
+                    }
+                }
+            )
+            .opacity(app.isHidden ? 0.5 : (app.isRunning ? 1.0 : 0.85))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
         .onHover { hovering in
             isHovered = hovering
             onHover?(hovering)
-        }
-        .onTapGesture {
-            onTap()
         }
         .onDrop(of: [.fileURL], isTargeted: $isDropTarget) { providers in
             handleDrop(providers: providers)
@@ -104,6 +135,48 @@ struct AppTileView: View {
 
     @ViewBuilder
     private var appContextMenu: some View {
+        // 1. Jump List Quick Tasks
+        Button("New Window") {
+            AppActionService.shared.openNewWindow(for: app)
+        }
+
+        if isWebBrowser(app.bundleIdentifier) {
+            Button("New Private Window") {
+                AppActionService.shared.openNewPrivateWindow(for: app)
+            }
+        }
+
+        // 2. Recent Documents Jump List
+        if let bundleID = app.bundleIdentifier {
+            let recents = RecentDocumentsService.shared.recentDocuments(for: bundleID)
+            if !recents.isEmpty {
+                Divider()
+                ForEach(recents) { doc in
+                    Button(doc.title) {
+                        RecentDocumentsService.shared.openDocument(doc, with: bundleID)
+                    }
+                }
+            }
+        }
+
+        Divider()
+
+        // 3. Window Specific Actions (if in Never Combine mode)
+        if let window = item.window {
+            Button("Close Window") {
+                if let pid = app.pid {
+                    _ = AccessibilityService.shared.closeWindow(pid: pid, windowTitle: window.title)
+                }
+            }
+            Button("Minimize Window") {
+                if let pid = app.pid {
+                    _ = AccessibilityService.shared.minimizeWindow(pid: pid, windowTitle: window.title)
+                }
+            }
+            Divider()
+        }
+
+        // 4. Standard App Controls
         if app.isRunning {
             Button("Show All Windows") {
                 AppActionService.shared.activateApp(app)
@@ -154,6 +227,11 @@ struct AppTileView: View {
                 AppActionService.shared.forceQuitApp(app)
             }
         }
+    }
+
+    private func isWebBrowser(_ bundleID: String?) -> Bool {
+        guard let bid = bundleID else { return false }
+        return bid.contains("Safari") || bid.contains("Chrome") || bid.contains("Firefox") || bid.contains("Brave")
     }
 
     private var tooltipText: String {

@@ -31,6 +31,30 @@ enum ThemeMode: String, CaseIterable, Identifiable, Codable {
 enum TaskbarPosition: String, CaseIterable, Identifiable, Codable {
     case bottom = "Bottom"
     case top = "Top"
+    case left = "Left"
+    case right = "Right"
+
+    var id: String { rawValue }
+
+    var isVertical: Bool {
+        self == .left || self == .right
+    }
+}
+
+/// Window grouping modes
+enum WindowGroupingMode: String, CaseIterable, Identifiable, Codable {
+    case alwaysCombine = "Always Combine"
+    case neverCombine = "Never Combine"
+    case combineWhenFull = "Combine When Full"
+
+    var id: String { rawValue }
+}
+
+/// Taskbar search presentation styles
+enum TaskbarSearchStyle: String, CaseIterable, Identifiable, Codable {
+    case searchBox = "Search Box"
+    case iconOnly = "Icon Only"
+    case hidden = "Hidden"
 
     var id: String { rawValue }
 }
@@ -95,6 +119,10 @@ class PreferencesService: ObservableObject {
     private let keyEnableWindowSnapping = "Smurfbar_EnableWindowSnapping"
     private let keyMultiMonitorMode = "Smurfbar_MultiMonitorMode"
     private let keyShowOverflowArrows = "Smurfbar_ShowOverflowArrows"
+    private let keyWindowGroupingMode = "Smurfbar_WindowGroupingMode"
+    private let keySearchStyle = "Smurfbar_SearchStyle"
+    private let keyShowSystemGlance = "Smurfbar_ShowSystemGlance"
+    private let keyAutoCheckUpdates = "Smurfbar_AutoCheckUpdates"
 
     @Published var autoHide: Bool {
         didSet { defaults.set(autoHide, forKey: keyAutoHide) }
@@ -144,6 +172,22 @@ class PreferencesService: ObservableObject {
         didSet { defaults.set(showOverflowArrows, forKey: keyShowOverflowArrows) }
     }
 
+    @Published var windowGroupingMode: WindowGroupingMode {
+        didSet { defaults.set(windowGroupingMode.rawValue, forKey: keyWindowGroupingMode) }
+    }
+
+    @Published var searchStyle: TaskbarSearchStyle {
+        didSet { defaults.set(searchStyle.rawValue, forKey: keySearchStyle) }
+    }
+
+    @Published var showSystemGlance: Bool {
+        didSet { defaults.set(showSystemGlance, forKey: keyShowSystemGlance) }
+    }
+
+    @Published var autoCheckUpdates: Bool {
+        didSet { defaults.set(autoCheckUpdates, forKey: keyAutoCheckUpdates) }
+    }
+
     @Published var launchAtLogin: Bool {
         didSet {
             setLaunchAtLogin(launchAtLogin)
@@ -152,6 +196,10 @@ class PreferencesService: ObservableObject {
 
     var taskbarHeight: CGFloat {
         compactMode ? 40 : 48
+    }
+
+    var taskbarThickness: CGFloat {
+        taskbarPosition.isVertical ? (compactMode ? 46 : 54) : (compactMode ? 40 : 48)
     }
 
     private init() {
@@ -179,6 +227,16 @@ class PreferencesService: ObservableObject {
         self.multiMonitorMode = MultiMonitorMode(rawValue: monitorRaw) ?? .allMonitors
 
         self.showOverflowArrows = defaults.object(forKey: keyShowOverflowArrows) == nil ? true : defaults.bool(forKey: keyShowOverflowArrows)
+
+        let groupRaw = defaults.string(forKey: keyWindowGroupingMode) ?? WindowGroupingMode.alwaysCombine.rawValue
+        self.windowGroupingMode = WindowGroupingMode(rawValue: groupRaw) ?? .alwaysCombine
+
+        let searchRaw = defaults.string(forKey: keySearchStyle) ?? TaskbarSearchStyle.searchBox.rawValue
+        self.searchStyle = TaskbarSearchStyle(rawValue: searchRaw) ?? .searchBox
+
+        self.showSystemGlance = defaults.object(forKey: keyShowSystemGlance) == nil ? true : defaults.bool(forKey: keyShowSystemGlance)
+
+        self.autoCheckUpdates = defaults.object(forKey: keyAutoCheckUpdates) == nil ? true : defaults.bool(forKey: keyAutoCheckUpdates)
 
         if #available(macOS 13.0, *) {
             self.launchAtLogin = (SMAppService.mainApp.status == .enabled)

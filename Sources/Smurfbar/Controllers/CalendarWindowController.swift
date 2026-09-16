@@ -61,7 +61,7 @@ class CalendarWindowController: NSWindowController {
             }
         )
 
-        let hostingView = NSHostingView(rootView: flyoutView)
+        let hostingView = FirstMouseHostingView(rootView: flyoutView)
         hostingView.frame = newPanel.contentView!.bounds
         hostingView.autoresizingMask = [.width, .height]
         newPanel.contentView?.addSubview(hostingView)

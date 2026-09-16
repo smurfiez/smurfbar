@@ -19,17 +19,8 @@ class TaskbarPanel: NSPanel {
 
     init(for screen: NSScreen) {
         self.targetScreen = screen
-        let screenFrame = screen.frame
-        let height = PreferencesService.shared.taskbarHeight
         let pos = PreferencesService.shared.taskbarPosition
-        let y = (pos == .top) ? (screenFrame.origin.y + screenFrame.height - height) : screenFrame.origin.y
-
-        let panelFrame = NSRect(
-            x: screenFrame.origin.x,
-            y: y,
-            width: screenFrame.width,
-            height: height
-        )
+        let panelFrame = Self.computeFrame(for: screen, position: pos, isHidden: false)
 
         super.init(
             contentRect: panelFrame,
@@ -80,17 +71,14 @@ class TaskbarPanel: NSPanel {
         visualEffect.state = .active
         self.visualEffectView = visualEffect
 
-        // Add a subtle border
-        let isTop = PreferencesService.shared.taskbarPosition == .top
-        let borderY: CGFloat = isTop ? 0 : (self.contentView!.bounds.height - 0.5)
-        let border = NSBox(frame: NSRect(x: 0, y: borderY,
-                                         width: self.contentView!.bounds.width, height: 0.5))
+        // Add border separator
+        let border = NSBox(frame: .zero)
         border.boxType = .separator
-        border.autoresizingMask = isTop ? [.width, .maxYMargin] : [.width, .minYMargin]
         self.topBorder = border
 
         self.contentView?.addSubview(visualEffect, positioned: .below, relativeTo: nil)
         self.contentView?.addSubview(border)
+        updateBorderPosition()
     }
 
     private func setupObservers() {
@@ -147,10 +135,22 @@ class TaskbarPanel: NSPanel {
 
     private func updateBorderPosition() {
         guard let border = topBorder, let content = contentView else { return }
-        let isTop = PreferencesService.shared.taskbarPosition == .top
-        let borderY: CGFloat = isTop ? 0 : (content.bounds.height - 0.5)
-        border.frame = NSRect(x: 0, y: borderY, width: content.bounds.width, height: 0.5)
-        border.autoresizingMask = isTop ? [.width, .maxYMargin] : [.width, .minYMargin]
+        let pos = PreferencesService.shared.taskbarPosition
+
+        switch pos {
+        case .bottom:
+            border.frame = NSRect(x: 0, y: content.bounds.height - 0.5, width: content.bounds.width, height: 0.5)
+            border.autoresizingMask = [.width, .minYMargin]
+        case .top:
+            border.frame = NSRect(x: 0, y: 0, width: content.bounds.width, height: 0.5)
+            border.autoresizingMask = [.width, .maxYMargin]
+        case .left:
+            border.frame = NSRect(x: content.bounds.width - 0.5, y: 0, width: 0.5, height: content.bounds.height)
+            border.autoresizingMask = [.height, .minXMargin]
+        case .right:
+            border.frame = NSRect(x: 0, y: 0, width: 0.5, height: content.bounds.height)
+            border.autoresizingMask = [.height, .maxXMargin]
+        }
     }
 
     // MARK: - Auto-Hide Management
@@ -184,24 +184,12 @@ class TaskbarPanel: NSPanel {
     private func handleGlobalMouseMove() {
         guard PreferencesService.shared.autoHide, let screen = targetScreen else { return }
         let mouseLocation = NSEvent.mouseLocation
-        let screenFrame = screen.frame
-        let isTop = PreferencesService.shared.taskbarPosition == .top
+        let pos = PreferencesService.shared.taskbarPosition
 
-        let isAtTriggerEdge: Bool
-        if isTop {
-            isAtTriggerEdge = (mouseLocation.x >= screenFrame.origin.x &&
-                               mouseLocation.x <= screenFrame.origin.x + screenFrame.width &&
-                               mouseLocation.y >= screenFrame.origin.y + screenFrame.height - 4)
-        } else {
-            isAtTriggerEdge = (mouseLocation.x >= screenFrame.origin.x &&
-                               mouseLocation.x <= screenFrame.origin.x + screenFrame.width &&
-                               mouseLocation.y <= screenFrame.origin.y + 4)
-        }
-
-        // Check if mouse is inside the taskbar frame
+        let isAtTrigger = isMouseAtTriggerEdge(mouse: mouseLocation, screen: screen, position: pos)
         let isInsidePanel = self.frame.contains(mouseLocation)
 
-        if isAtTriggerEdge || isInsidePanel {
+        if isAtTrigger || isInsidePanel {
             autoHideTimer?.invalidate()
             autoHideTimer = nil
             if isPanelHidden {
@@ -215,66 +203,70 @@ class TaskbarPanel: NSPanel {
         }
     }
 
+    private func isMouseAtTriggerEdge(mouse: CGPoint, screen: NSScreen, position: TaskbarPosition) -> Bool {
+        let frame = screen.frame
+        switch position {
+        case .bottom:
+            return mouse.x >= frame.minX && mouse.x <= frame.maxX && mouse.y <= frame.minY + 4
+        case .top:
+            return mouse.x >= frame.minX && mouse.x <= frame.maxX && mouse.y >= frame.maxY - 4
+        case .left:
+            return mouse.y >= frame.minY && mouse.y <= frame.maxY && mouse.x <= frame.minX + 4
+        case .right:
+            return mouse.y >= frame.minY && mouse.y <= frame.maxY && mouse.x >= frame.maxX - 4
+        }
+    }
+
     private func revealPanel(animated: Bool) {
         guard let screen = targetScreen else { return }
         isPanelHidden = false
-        let height = PreferencesService.shared.taskbarHeight
-        let isTop = PreferencesService.shared.taskbarPosition == .top
-        let y = isTop ? (screen.frame.origin.y + screen.frame.height - height) : screen.frame.origin.y
-
-        let activeFrame = NSRect(
-            x: screen.frame.origin.x,
-            y: y,
-            width: screen.frame.width,
-            height: height
-        )
+        let pos = PreferencesService.shared.taskbarPosition
+        let activeFrame = Self.computeFrame(for: screen, position: pos, isHidden: false)
         self.setFrame(activeFrame, display: true, animate: animated)
     }
 
     private func hidePanel(animated: Bool) {
         guard let screen = targetScreen else { return }
         isPanelHidden = true
-        let height = PreferencesService.shared.taskbarHeight
-        let isTop = PreferencesService.shared.taskbarPosition == .top
-
-        let hiddenY: CGFloat
-        if isTop {
-            // Slide up leaving 2px trigger strip
-            hiddenY = screen.frame.origin.y + screen.frame.height - 2
-        } else {
-            // Slide down leaving 2px trigger strip
-            hiddenY = screen.frame.origin.y - height + 2
-        }
-
-        let hiddenFrame = NSRect(
-            x: screen.frame.origin.x,
-            y: hiddenY,
-            width: screen.frame.width,
-            height: height
-        )
+        let pos = PreferencesService.shared.taskbarPosition
+        let hiddenFrame = Self.computeFrame(for: screen, position: pos, isHidden: true)
         self.setFrame(hiddenFrame, display: true, animate: animated)
     }
 
     /// Reposition the panel to the given screen and configured edge.
     func reposition(on screen: NSScreen) {
         self.targetScreen = screen
-        let screenFrame = screen.frame
-        let height = PreferencesService.shared.taskbarHeight
-        let isTop = PreferencesService.shared.taskbarPosition == .top
-        let y = isTop ? (screenFrame.origin.y + screenFrame.height - height) : screenFrame.origin.y
-
-        let newFrame = NSRect(
-            x: screenFrame.origin.x,
-            y: y,
-            width: screenFrame.width,
-            height: height
-        )
+        let pos = PreferencesService.shared.taskbarPosition
+        let newFrame = Self.computeFrame(for: screen, position: pos, isHidden: false)
         self.setFrame(newFrame, display: true, animate: false)
+    }
+
+    private static func computeFrame(for screen: NSScreen, position: TaskbarPosition, isHidden: Bool = false) -> NSRect {
+        let screenFrame = screen.frame
+        let thickness = PreferencesService.shared.taskbarThickness
+
+        switch position {
+        case .bottom:
+            let y = isHidden ? (screenFrame.origin.y - thickness + 2) : screenFrame.origin.y
+            return NSRect(x: screenFrame.origin.x, y: y, width: screenFrame.width, height: thickness)
+
+        case .top:
+            let y = isHidden ? (screenFrame.origin.y + screenFrame.height - 2) : (screenFrame.origin.y + screenFrame.height - thickness)
+            return NSRect(x: screenFrame.origin.x, y: y, width: screenFrame.width, height: thickness)
+
+        case .left:
+            let x = isHidden ? (screenFrame.origin.x - thickness + 2) : screenFrame.origin.x
+            return NSRect(x: x, y: screenFrame.origin.y, width: thickness, height: screenFrame.height)
+
+        case .right:
+            let x = isHidden ? (screenFrame.origin.x + screenFrame.width - 2) : (screenFrame.origin.x + screenFrame.width - thickness)
+            return NSRect(x: x, y: screenFrame.origin.y, width: thickness, height: screenFrame.height)
+        }
     }
 
     /// Host a SwiftUI view inside this panel.
     func setSwiftUIContent<Content: View>(_ content: Content) {
-        let hostingView = NSHostingView(rootView: content)
+        let hostingView = FirstMouseHostingView(rootView: content)
         hostingView.frame = self.contentView!.bounds
         hostingView.autoresizingMask = [.width, .height]
 

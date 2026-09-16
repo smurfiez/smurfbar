@@ -10,8 +10,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 1. Check and request Accessibility permissions
         if !AccessibilityService.shared.isAccessibilityGranted() {
             AccessibilityService.shared.requestAccessibilityPermissions()
-            // Show a message explaining why permissions are needed
-            showAccessibilityAlert()
         }
 
         // 2. Check and request Screen Recording permissions (needed for live window previews)
@@ -38,13 +36,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // 7. Auto-hide the macOS Dock
         DockService.shared.hideDock()
 
-        // 8. Prevent unwanted windows (e.g. SwiftUI settings restoration) from showing on launch
-        UserDefaults.standard.removeObject(forKey: "NSWindow Frame com_apple_SwiftUI_Settings_window")
-        DispatchQueue.main.async {
-            for window in NSApp.windows where !(window is TaskbarPanel) {
-                window.orderOut(nil)
-            }
-        }
+        // 8. Initialize update service (triggers auto-check if enabled)
+        _ = UpdateService.shared
 
         print("✅ Smurfbar launched successfully")
     }
@@ -75,31 +68,5 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
-    // MARK: - Private
 
-    private func showAccessibilityAlert() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-            let alert = NSAlert()
-            alert.messageText = "Accessibility Access Required"
-            alert.informativeText = """
-            Smurfbar needs Accessibility access to:
-            • See which apps and windows are running
-            • Show window previews
-            • Switch between windows
-
-            Please grant access in System Settings → Privacy & Security → Accessibility, then relaunch Smurfbar.
-            """
-            alert.alertStyle = .warning
-            alert.addButton(withTitle: "Open System Settings")
-            alert.addButton(withTitle: "Continue Anyway")
-
-            let response = alert.runModal()
-            if response == .alertFirstButtonReturn {
-                // Open System Settings → Accessibility
-                if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
-                    NSWorkspace.shared.open(url)
-                }
-            }
-        }
-    }
 }
