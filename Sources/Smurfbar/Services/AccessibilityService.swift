@@ -181,6 +181,83 @@ class AccessibilityService {
         return false
     }
 
+    // MARK: - Window Snapping & Geometry
+
+    /// Get the currently focused/frontmost window element across regular applications
+    func getFrontmostWindow() -> AXUIElement? {
+        guard let frontApp = NSWorkspace.shared.frontmostApplication,
+              frontApp.activationPolicy == .regular,
+              frontApp.bundleIdentifier != Bundle.main.bundleIdentifier else { return nil }
+
+        let appElement = AXUIElementCreateApplication(frontApp.processIdentifier)
+        var windowValue: AnyObject?
+        let result = AXUIElementCopyAttributeValue(appElement, kAXFocusedWindowAttribute as CFString, &windowValue)
+        if result == .success, let window = windowValue {
+            return (window as! AXUIElement)
+        }
+
+        if let windows = getAXWindows(for: appElement), let first = windows.first {
+            return first
+        }
+        return nil
+    }
+
+    /// Set a window's frame using Cocoa coordinate system
+    func setWindowFrame(window: AXUIElement, cocoaFrame: CGRect) -> Bool {
+        let axFrame = cocoaRectToAXRect(cocoaFrame)
+        var point = CGPoint(x: axFrame.origin.x, y: axFrame.origin.y)
+        var size = CGSize(width: axFrame.width, height: axFrame.height)
+
+        guard let posVal = AXValueCreate(.cgPoint, &point),
+              let sizeVal = AXValueCreate(.cgSize, &size) else {
+            return false
+        }
+
+        // Set size first then position to avoid offscreen constraint clamping
+        _ = AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeVal)
+        let posRes = AXUIElementSetAttributeValue(window, kAXPositionAttribute as CFString, posVal)
+        // Repeat size set once repositioned
+        _ = AXUIElementSetAttributeValue(window, kAXSizeAttribute as CFString, sizeVal)
+
+        return posRes == .success
+    }
+
+    /// Get a window's current frame in Cocoa coordinate system
+    func getWindowFrame(window: AXUIElement) -> CGRect? {
+        var posValue: AnyObject?
+        var sizeValue: AnyObject?
+
+        guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &posValue) == .success,
+              AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeValue) == .success,
+              let posVal = posValue, let sizeVal = sizeValue else {
+            return nil
+        }
+
+        var point = CGPoint.zero
+        var size = CGSize.zero
+        AXValueGetValue(posVal as! AXValue, .cgPoint, &point)
+        AXValueGetValue(sizeVal as! AXValue, .cgSize, &size)
+
+        let axRect = CGRect(origin: point, size: size)
+        return axRectToCocoaRect(axRect)
+    }
+
+    /// Convert Cocoa screen coordinates to AX coordinates (origin at top-left of primary screen)
+    func cocoaRectToAXRect(_ cocoaRect: CGRect) -> CGRect {
+        guard let primaryScreen = NSScreen.screens.first else { return cocoaRect }
+        let primaryHeight = primaryScreen.frame.height
+        let axY = primaryHeight - (cocoaRect.origin.y + cocoaRect.height)
+        return CGRect(x: cocoaRect.origin.x, y: axY, width: cocoaRect.width, height: cocoaRect.height)
+    }
+
+    /// Convert AX coordinates to Cocoa screen coordinates
+    func axRectToCocoaRect(_ axRect: CGRect) -> CGRect {
+        guard let primaryScreen = NSScreen.screens.first else { return axRect }
+        let primaryHeight = primaryScreen.frame.height
+        let cocoaY = primaryHeight - (axRect.origin.y + axRect.height)
+        return CGRect(x: axRect.origin.x, y: cocoaY, width: axRect.width, height: axRect.height)
+    }
+
     // MARK: - Private Helpers
 
     private func getAXWindows(for appElement: AXUIElement) -> [AXUIElement]? {

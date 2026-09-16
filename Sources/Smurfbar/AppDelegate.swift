@@ -3,7 +3,7 @@ import AppKit
 /// The main application delegate that orchestrates all Smurfbar components.
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var appMonitor: AppMonitor!
-    private var windowController: TaskbarWindowController!
+    private var multiMonitorService: MultiMonitorService!
     private var statusBarController: StatusBarController!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -19,25 +19,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             ScreenCaptureService.shared.requestPermission()
         }
 
-        // 2. Initialize the app monitor
+        // 3. Initialize the app monitor
         appMonitor = AppMonitor()
         appMonitor.startMonitoring()
 
-        // 3. Create and show the taskbar
-        windowController = TaskbarWindowController(appMonitor: appMonitor)
-        windowController.showTaskbar()
+        // 4. Create and manage taskbars across connected displays
+        multiMonitorService = MultiMonitorService(appMonitor: appMonitor)
+        multiMonitorService.setup()
 
-        // 4. Set up the menu bar status item
-        statusBarController = StatusBarController(windowController: windowController)
+        // 5. Start Aero Snap edge detection and keyboard shortcuts
+        SnapZoneService.shared.start()
+        KeyboardShortcutService.shared.start()
+
+        // 6. Set up the menu bar status item
+        statusBarController = StatusBarController(multiMonitorService: multiMonitorService)
         statusBarController.setup()
 
-        // 5. Auto-hide the macOS Dock
+        // 7. Auto-hide the macOS Dock
         DockService.shared.hideDock()
+
+        // 8. Prevent unwanted windows (e.g. SwiftUI settings restoration) from showing on launch
+        UserDefaults.standard.removeObject(forKey: "NSWindow Frame com_apple_SwiftUI_Settings_window")
+        DispatchQueue.main.async {
+            for window in NSApp.windows where !(window is TaskbarPanel) {
+                window.orderOut(nil)
+            }
+        }
 
         print("✅ Smurfbar launched successfully")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        // Stop window snapping services
+        SnapZoneService.shared.stop()
+        KeyboardShortcutService.shared.stop()
+
+        // Stop multi-monitor taskbars
+        multiMonitorService?.teardown()
+
         // Stop monitoring
         appMonitor?.stopMonitoring()
 

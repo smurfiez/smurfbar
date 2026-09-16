@@ -232,10 +232,11 @@ struct AppLauncherFlyoutView: View {
 
     private func lockScreen() {
         onClose()
-        let task = Process()
-        task.launchPath = "/usr/bin/osascript"
-        task.arguments = ["-e", "tell application \"System Events\" to sleep"]
-        try? task.run()
+        let script = "tell application \"System Events\" to key code 12 using {control down, command down}"
+        DispatchQueue.global(qos: .userInitiated).async {
+            var error: NSDictionary?
+            NSAppleScript(source: script)?.executeAndReturnError(&error)
+        }
     }
 
     private func sleepMac() {

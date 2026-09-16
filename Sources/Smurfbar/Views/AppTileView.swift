@@ -38,22 +38,17 @@ struct AppTileView: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isDropTarget ? Color.accentColor : Color.clear, lineWidth: 2)
+                .stroke(isDropTarget ? prefs.accentColorChoice.color : Color.clear, lineWidth: 2)
         )
         .overlay(
-            // Bottom indicator: active accent bar or running dot
+            // Indicator: active accent bar or running dot (top or bottom based on taskbar position)
             VStack {
-                Spacer()
-                if isActive {
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.accentColor)
-                        .frame(height: 2)
-                        .padding(.horizontal, 8)
-                } else if app.isRunning {
-                    Circle()
-                        .fill(Color.secondary.opacity(0.5))
-                        .frame(width: 4, height: 4)
-                        .padding(.bottom, 1)
+                if prefs.taskbarPosition == .top {
+                    indicatorBar
+                    Spacer()
+                } else {
+                    Spacer()
+                    indicatorBar
                 }
             }
         )
@@ -77,10 +72,26 @@ struct AppTileView: View {
 
     // MARK: - Subviews
 
+    @ViewBuilder
+    private var indicatorBar: some View {
+        if isActive {
+            RoundedRectangle(cornerRadius: 1)
+                .fill(prefs.accentColorChoice.color)
+                .frame(height: 2)
+                .padding(.horizontal, 8)
+                .padding(prefs.taskbarPosition == .top ? .top : .bottom, 1)
+        } else if app.isRunning {
+            Circle()
+                .fill(Color.secondary.opacity(0.5))
+                .frame(width: 4, height: 4)
+                .padding(prefs.taskbarPosition == .top ? .top : .bottom, 2)
+        }
+    }
+
     private var tileBackground: some View {
         Group {
             if isDropTarget {
-                Color.accentColor.opacity(0.2)
+                prefs.accentColorChoice.color.opacity(0.2)
             } else if isActive {
                 Color.primary.opacity(0.12)
             } else if isHovered {

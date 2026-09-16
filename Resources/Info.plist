@@ -13,7 +13,7 @@
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
+    <string>0.4.0</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleInfoDictionaryVersion</key>
@@ -26,6 +26,8 @@
     <string>Smurfbar needs Accessibility access to monitor running applications, enumerate windows, and capture window thumbnails for the taskbar display.</string>
     <key>NSScreenCaptureUsageDescription</key>
     <string>Smurfbar needs Screen Recording permission to display live window thumbnail previews in the taskbar.</string>
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Smurfbar needs Bluetooth access to display Bluetooth device status and toggle Bluetooth from Quick Settings.</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 Smurf. All rights reserved.</string>
     <key>NSHighResolutionCapable</key>
@@ -33,6 +35,8 @@
     <key>NSSupportsAutomaticTermination</key>
     <false/>
     <key>NSSupportsSuddenTermination</key>
+    <false/>
+    <key>NSQuitAlwaysKeepsWindows</key>
     <false/>
 </dict>
 </plist>

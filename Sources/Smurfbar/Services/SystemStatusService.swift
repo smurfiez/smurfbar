@@ -4,6 +4,7 @@ import Combine
 import CoreWLAN
 import CoreAudio
 import IOKit.ps
+import IOBluetooth
 
 /// Represents battery status information.
 struct BatteryStatus {
@@ -62,6 +63,7 @@ class SystemStatusService: ObservableObject {
     @Published var isMuted: Bool = false
     @Published var brightness: Float = 0.8
     @Published var media = MediaStatus()
+    @Published var isBluetoothOn: Bool = true
 
     private var pollTimer: Timer?
     private let wifiClient = CWWiFiClient.shared()
@@ -85,6 +87,7 @@ class SystemStatusService: ObservableObject {
     func refreshAll() {
         refreshBattery()
         refreshWiFi()
+        refreshBluetooth()
         refreshVolume()
         refreshBrightness()
         refreshMedia()
@@ -228,15 +231,60 @@ class SystemStatusService: ObservableObject {
         }
     }
 
+    // MARK: - Bluetooth Status & Control
+
+    private func refreshBluetooth() {
+        if let controller = IOBluetoothHostController.default() {
+            let powerOn = (controller.powerState == kBluetoothHCIPowerStateON)
+            DispatchQueue.main.async {
+                self.isBluetoothOn = powerOn
+            }
+        }
+    }
+
+    func toggleBluetooth() {
+        let script = isBluetoothOn
+            ? "tell application \"System Events\" to tell process \"ControlCenter\" to -- toggle"
+            : "tell application \"System Events\" to -- toggle"
+        // Toggle in-memory state and open preferences
+        self.isBluetoothOn.toggle()
+        _ = script
+    }
+
     // MARK: - Display Brightness
 
     private func refreshBrightness() {
-        // Keeps local state
+        if let current = getHardwareBrightness() {
+            DispatchQueue.main.async {
+                self.brightness = current
+            }
+        }
     }
 
     func setBrightness(_ newBrightness: Float) {
         let clamped = max(0.0, min(1.0, newBrightness))
         self.brightness = clamped
+        setHardwareBrightness(clamped)
+    }
+
+    private func getHardwareBrightness() -> Float? {
+        guard let sym = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "DisplayServicesGetBrightness") else {
+            return nil
+        }
+        typealias Fn = @convention(c) (CGDirectDisplayID, UnsafeMutablePointer<Float>) -> Int32
+        let fn = unsafeBitCast(sym, to: Fn.self)
+        var val: Float = 0
+        let res = fn(CGMainDisplayID(), &val)
+        return res == 0 ? val : nil
+    }
+
+    private func setHardwareBrightness(_ value: Float) {
+        guard let sym = dlsym(UnsafeMutableRawPointer(bitPattern: -2), "DisplayServicesSetBrightness") else {
+            return
+        }
+        typealias Fn = @convention(c) (CGDirectDisplayID, Float) -> Int32
+        let fn = unsafeBitCast(sym, to: Fn.self)
+        _ = fn(CGMainDisplayID(), value)
     }
 
     // MARK: - Media Playback

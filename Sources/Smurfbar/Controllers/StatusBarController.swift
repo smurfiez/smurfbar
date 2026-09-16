@@ -5,10 +5,10 @@ import AppKit
 /// primary way for the user to access preferences and quit.
 class StatusBarController {
     private var statusItem: NSStatusItem?
-    private weak var windowController: TaskbarWindowController?
+    private weak var multiMonitorService: MultiMonitorService?
 
-    init(windowController: TaskbarWindowController) {
-        self.windowController = windowController
+    init(multiMonitorService: MultiMonitorService) {
+        self.multiMonitorService = multiMonitorService
     }
 
     func setup() {
@@ -70,14 +70,14 @@ class StatusBarController {
     @objc private func showAbout() {
         let alert = NSAlert()
         alert.messageText = "Smurfbar"
-        alert.informativeText = "A Windows-style taskbar for macOS.\n\nVersion 0.1.0"
+        alert.informativeText = "A Windows-style taskbar and desktop manager for macOS.\n\nVersion 0.4.0 (Phase 4)"
         alert.alertStyle = .informational
         alert.addButton(withTitle: "OK")
         alert.runModal()
     }
 
     @objc private func toggleTaskbar() {
-        windowController?.toggleTaskbar()
+        multiMonitorService?.toggleTaskbars()
     }
 
     @objc private func openPreferences() {

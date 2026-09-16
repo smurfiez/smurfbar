@@ -7,6 +7,7 @@ struct TaskbarContentView: View {
     @ObservedObject var appMonitor: AppMonitor
     @ObservedObject var prefs = PreferencesService.shared
     @ObservedObject var systemStatus = SystemStatusService.shared
+    var screen: NSScreen? = nil
 
     @State private var currentDate: Date = Date()
     @State private var isClockHovered: Bool = false
@@ -15,6 +16,14 @@ struct TaskbarContentView: View {
     @State private var isDesktopShown: Bool = false
 
     private let clockTimer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
+
+    private var visibleApps: [RunningApp] {
+        if prefs.multiMonitorMode == .allMonitors {
+            return appMonitor.apps(for: screen)
+        } else {
+            return appMonitor.runningApps
+        }
+    }
 
     var body: some View {
         HStack(spacing: 2) {
@@ -25,27 +34,12 @@ struct TaskbarContentView: View {
                 .frame(height: prefs.compactMode ? 22 : 28)
                 .padding(.horizontal, 4)
 
-            // Running & Pinned apps
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 2) {
-                    ForEach(appMonitor.runningApps) { app in
-                        AppTileView(
-                            app: app,
-                            isActive: app.pid != nil && app.pid == appMonitor.activeAppPID,
-                            onTap: {
-                                handleAppTap(app)
-                            },
-                            onRightClick: {
-                                // Context menu is handled via SwiftUI .contextMenu
-                            },
-                            onHover: { hovering in
-                                handleAppHover(app: app, hovering: hovering)
-                            }
-                        )
-                    }
-                }
-                .padding(.horizontal, 4)
+            if prefs.taskbarAlignment == .center {
+                Spacer()
             }
+
+            // Running & Pinned apps with optional overflow controls
+            appsSection
 
             Spacer()
 
@@ -61,17 +55,84 @@ struct TaskbarContentView: View {
 
     // MARK: - Subviews
 
+    private var appsSection: some View {
+        ScrollViewReader { proxy in
+            HStack(spacing: 2) {
+                if prefs.showOverflowArrows && visibleApps.count > 8 {
+                    Button(action: {
+                        if let first = visibleApps.first {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                proxy.scrollTo(first.id, anchor: .leading)
+                            }
+                        }
+                    }) {
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.secondary)
+                            .frame(width: 16, height: prefs.compactMode ? 24 : 28)
+                            .background(Color.primary.opacity(0.06))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Scroll to start")
+                }
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 2) {
+                        ForEach(visibleApps) { app in
+                            AppTileView(
+                                app: app,
+                                isActive: app.pid != nil && app.pid == appMonitor.activeAppPID,
+                                onTap: {
+                                    handleAppTap(app)
+                                },
+                                onRightClick: {
+                                    // Context menu is handled via SwiftUI .contextMenu
+                                },
+                                onHover: { hovering in
+                                    handleAppHover(app: app, hovering: hovering)
+                                }
+                            )
+                            .id(app.id)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
+
+                if prefs.showOverflowArrows && visibleApps.count > 8 {
+                    Button(action: {
+                        if let last = visibleApps.last {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                proxy.scrollTo(last.id, anchor: .trailing)
+                            }
+                        }
+                    }) {
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.secondary)
+                            .frame(width: 16, height: prefs.compactMode ? 24 : 28)
+                            .background(Color.primary.opacity(0.06))
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Scroll to end")
+                }
+            }
+        }
+    }
+
     private var smurfbarButton: some View {
         Button(action: {
-            if let screen = NSScreen.main ?? NSScreen.screens.first {
-                AppLauncherWindowController.shared.toggle(relativeTo: screen) {
+            let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
+            if let targetScreen = targetScreen {
+                AppLauncherWindowController.shared.toggle(relativeTo: targetScreen) {
                     PreferencesWindowController.shared.showPreferences()
                 }
             }
         }) {
             Image(systemName: "square.grid.2x2.fill")
                 .font(.system(size: prefs.compactMode ? 14 : 16, weight: .medium))
-                .foregroundColor(.accentColor)
+                .foregroundColor(prefs.accentColorChoice.color)
                 .frame(width: prefs.compactMode ? 28 : 32, height: prefs.compactMode ? 28 : 32)
                 .background(Color.primary.opacity(0.06))
                 .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -93,8 +154,9 @@ struct TaskbarContentView: View {
 
             // Interactive Clock Button
             Button(action: {
-                if let screen = NSScreen.main ?? NSScreen.screens.first {
-                    CalendarWindowController.shared.toggle(relativeTo: screen)
+                let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
+                if let targetScreen = targetScreen {
+                    CalendarWindowController.shared.toggle(relativeTo: targetScreen)
                 }
             }) {
                 Text(timeString(from: currentDate))
@@ -117,8 +179,9 @@ struct TaskbarContentView: View {
 
     private var systemTrayButtons: some View {
         Button(action: {
-            if let screen = NSScreen.main ?? NSScreen.screens.first {
-                QuickSettingsWindowController.shared.toggle(relativeTo: screen) {
+            let targetScreen = screen ?? NSScreen.main ?? NSScreen.screens.first
+            if let targetScreen = targetScreen {
+                QuickSettingsWindowController.shared.toggle(relativeTo: targetScreen) {
                     PreferencesWindowController.shared.showPreferences()
                 }
             }

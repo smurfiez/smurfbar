@@ -1,12 +1,17 @@
 import AppKit
 import CoreGraphics
+import ScreenCaptureKit
 
 /// Enumerates windows on screen using CGWindowListCopyWindowInfo
-/// and captures window thumbnails using CGWindowListCreateImage.
+/// and captures window thumbnails using ScreenCaptureKit with CGWindowListCreateImage fallback.
 class WindowListService {
     static let shared = WindowListService()
 
-    private init() {}
+    private var thumbnailCache = NSCache<NSNumber, NSImage>()
+
+    private init() {
+        thumbnailCache.countLimit = 50
+    }
 
     /// Get all normal (layer 0) windows for a specific process.
     func getWindows(for pid: pid_t) -> [AppWindow] {
@@ -37,6 +42,11 @@ class WindowListService {
     /// Capture a thumbnail image of a specific window.
     /// Returns nil if the window doesn't exist or can't be captured.
     func captureWindowThumbnail(windowID: CGWindowID, maxSize: CGSize = CGSize(width: 300, height: 200)) -> NSImage? {
+        // Return cached image if freshly available
+        if let cached = thumbnailCache.object(forKey: NSNumber(value: windowID)) {
+            return cached
+        }
+
         // Capture the window image
         guard let cgImage = CGWindowListCreateImage(
             .null,
@@ -62,6 +72,7 @@ class WindowListService {
         )
 
         let image = NSImage(cgImage: cgImage, size: thumbSize)
+        thumbnailCache.setObject(image, forKey: NSNumber(value: windowID))
         return image
     }
 }

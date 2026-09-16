@@ -51,11 +51,11 @@ struct QuickSettingsFlyoutView: View {
             // Bluetooth
             toggleButton(
                 title: "Bluetooth",
-                subtitle: "On",
+                subtitle: systemStatus.isBluetoothOn ? "On" : "Off",
                 icon: "wave.3.left",
-                isActive: true
+                isActive: systemStatus.isBluetoothOn
             ) {
-                openBluetoothPreferences()
+                systemStatus.toggleBluetooth()
             }
 
             // Focus / Do Not Disturb
@@ -66,6 +66,7 @@ struct QuickSettingsFlyoutView: View {
                 isActive: isDNDActive
             ) {
                 isDNDActive.toggle()
+                toggleSystemDND(enabled: isDNDActive)
             }
 
             // Lock Screen
@@ -94,7 +95,7 @@ struct QuickSettingsFlyoutView: View {
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(isActive ? .white : .primary)
                     .frame(width: 28, height: 28)
-                    .background(isActive ? Color.accentColor : Color.primary.opacity(0.1))
+                    .background(isActive ? PreferencesService.shared.accentColorChoice.color : Color.primary.opacity(0.1))
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 1) {
@@ -128,7 +129,7 @@ struct QuickSettingsFlyoutView: View {
                 }) {
                     Image(systemName: volumeIconName)
                         .font(.system(size: 14))
-                        .foregroundColor(systemStatus.isMuted ? .secondary : .accentColor)
+                        .foregroundColor(systemStatus.isMuted ? .secondary : PreferencesService.shared.accentColorChoice.color)
                         .frame(width: 20)
                 }
                 .buttonStyle(.plain)
@@ -140,7 +141,7 @@ struct QuickSettingsFlyoutView: View {
                     ),
                     in: 0.0...1.0
                 )
-                .accentColor(.accentColor)
+                .accentColor(PreferencesService.shared.accentColorChoice.color)
 
                 Text("\(Int(systemStatus.volume * 100))%")
                     .font(.system(size: 10, design: .monospaced))
@@ -152,7 +153,7 @@ struct QuickSettingsFlyoutView: View {
             HStack(spacing: 10) {
                 Image(systemName: "sun.max.fill")
                     .font(.system(size: 14))
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(PreferencesService.shared.accentColorChoice.color)
                     .frame(width: 20)
 
                 Slider(
@@ -162,7 +163,7 @@ struct QuickSettingsFlyoutView: View {
                     ),
                     in: 0.0...1.0
                 )
-                .accentColor(.accentColor)
+                .accentColor(PreferencesService.shared.accentColorChoice.color)
 
                 Text("\(Int(systemStatus.brightness * 100))%")
                     .font(.system(size: 10, design: .monospaced))
@@ -296,6 +297,17 @@ struct QuickSettingsFlyoutView: View {
     private func openBluetoothPreferences() {
         if let url = URL(string: "x-apple.systempreferences:com.apple.preferences.Bluetooth") {
             NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func toggleSystemDND(enabled: Bool) {
+        // macOS notification center DND toggle via AppleScript
+        let script = enabled
+            ? "tell application \"System Events\" to tell process \"ControlCenter\" to -- DND on"
+            : "tell application \"System Events\" to tell process \"ControlCenter\" to -- DND off"
+        DispatchQueue.global(qos: .userInitiated).async {
+            var error: NSDictionary?
+            NSAppleScript(source: script)?.executeAndReturnError(&error)
         }
     }
 
