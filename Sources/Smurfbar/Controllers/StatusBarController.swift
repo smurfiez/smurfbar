@@ -46,6 +46,10 @@ class StatusBarController {
         toggleItem.keyEquivalentModifierMask = [.command, .shift]
         menu.addItem(toggleItem)
 
+        let prefsItem = NSMenuItem(title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ",")
+        prefsItem.target = self
+        menu.addItem(prefsItem)
+
         menu.addItem(.separator())
 
         let restoreDockItem = NSMenuItem(title: "Restore Dock", action: #selector(restoreDock), keyEquivalent: "")
@@ -74,6 +78,10 @@ class StatusBarController {
 
     @objc private func toggleTaskbar() {
         windowController?.toggleTaskbar()
+    }
+
+    @objc private func openPreferences() {
+        PreferencesWindowController.shared.showPreferences()
     }
 
     @objc private func restoreDock() {

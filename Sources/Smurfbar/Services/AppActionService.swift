@@ -1,6 +1,6 @@
 import AppKit
 
-/// Handles user-initiated actions on running applications (activate, hide, quit, etc.)
+/// Handles user-initiated actions on applications (activate, hide, quit, pin, open files, etc.)
 class AppActionService {
     static let shared = AppActionService()
 
@@ -8,58 +8,110 @@ class AppActionService {
 
     /// Activate the app (bring all its windows to front).
     /// If the app is already active, hide it instead (toggle behavior).
+    /// If the app is not running (pinned), launch it.
     func toggleActivation(for app: RunningApp) {
+        guard let nsApp = app.nsRunningApp, app.isRunning else {
+            launchApp(app)
+            return
+        }
+
         if app.isActive {
-            app.nsRunningApp.hide()
+            nsApp.hide()
         } else {
-            app.nsRunningApp.activate()
+            nsApp.activate()
             if app.isHidden {
-                app.nsRunningApp.unhide()
+                nsApp.unhide()
             }
         }
     }
 
-    /// Activate the app unconditionally.
+    /// Activate the app unconditionally, launching it if necessary.
     func activateApp(_ app: RunningApp) {
-        app.nsRunningApp.unhide()
-        app.nsRunningApp.activate()
+        guard let nsApp = app.nsRunningApp, app.isRunning else {
+            launchApp(app)
+            return
+        }
+        nsApp.unhide()
+        nsApp.activate()
+    }
+
+    /// Launch a non-running app
+    func launchApp(_ app: RunningApp) {
+        guard let url = app.bundleURL else {
+            print("⚠️ Cannot launch \(app.localizedName): bundle URL not found")
+            return
+        }
+
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = true
+        NSWorkspace.shared.openApplication(at: url, configuration: config) { _, error in
+            if let error = error {
+                print("❌ Failed to launch \(app.localizedName): \(error.localizedDescription)")
+            }
+        }
     }
 
     /// Hide the app.
     func hideApp(_ app: RunningApp) {
-        app.nsRunningApp.hide()
+        app.nsRunningApp?.hide()
     }
 
     /// Unhide the app.
     func unhideApp(_ app: RunningApp) {
-        app.nsRunningApp.unhide()
+        app.nsRunningApp?.unhide()
     }
 
     /// Gracefully quit the app.
     func quitApp(_ app: RunningApp) {
-        app.nsRunningApp.terminate()
+        app.nsRunningApp?.terminate()
     }
 
     /// Force quit the app.
     func forceQuitApp(_ app: RunningApp) {
-        app.nsRunningApp.forceTerminate()
+        app.nsRunningApp?.forceTerminate()
+    }
+
+    /// Pin or unpin the app from the taskbar
+    func togglePin(for app: RunningApp) {
+        guard let bundleID = app.bundleIdentifier else { return }
+        PinnedAppsService.shared.togglePin(
+            bundleIdentifier: bundleID,
+            localizedName: app.localizedName,
+            bundlePath: app.bundleURL?.path
+        )
+    }
+
+    /// Open files with the application (e.g. for drag-and-drop)
+    func openFiles(_ urls: [URL], with app: RunningApp) {
+        guard let appURL = app.bundleURL else { return }
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = true
+        NSWorkspace.shared.open(urls, withApplicationAt: appURL, configuration: config) { _, error in
+            if let error = error {
+                print("❌ Failed to open files with \(app.localizedName): \(error.localizedDescription)")
+            }
+        }
     }
 
     /// Activate a specific window by its title.
     func activateWindow(for app: RunningApp, windowTitle: String) {
+        guard let pid = app.pid else {
+            activateApp(app)
+            return
+        }
+
         let success = AccessibilityService.shared.raiseWindow(
-            pid: app.pid,
+            pid: pid,
             windowTitle: windowTitle
         )
         if !success {
-            // Fallback: just activate the app
             activateApp(app)
         }
     }
 
     /// Show the app's bundle in Finder.
     func showInFinder(_ app: RunningApp) {
-        if let url = app.nsRunningApp.bundleURL {
+        if let url = app.bundleURL {
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
     }

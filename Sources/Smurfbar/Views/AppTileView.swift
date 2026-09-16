@@ -1,14 +1,17 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// An individual app tile in the taskbar.
-/// Shows the app icon, name, and active/running state.
+/// Shows the app icon, name, active/running state, pin state, and handles click/drag-and-drop.
 struct AppTileView: View {
     @ObservedObject var app: RunningApp
+    @ObservedObject var prefs = PreferencesService.shared
     let isActive: Bool
     let onTap: () -> Void
     let onRightClick: () -> Void
 
     @State private var isHovered: Bool = false
+    @State private var isDropTarget: Bool = false
 
     var body: some View {
         HStack(spacing: 6) {
@@ -18,12 +21,14 @@ struct AppTileView: View {
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 24, height: 24)
 
-            // App name
-            Text(app.localizedName)
-                .font(.system(size: 12, weight: isActive ? .semibold : .regular))
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .foregroundColor(isActive ? .primary : .secondary)
+            // App name (optional)
+            if prefs.showAppLabels {
+                Text(app.localizedName)
+                    .font(.system(size: 12, weight: isActive ? .semibold : .regular))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .foregroundColor(isActive ? .primary : (app.isRunning ? .secondary : .secondary.opacity(0.8)))
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
@@ -31,7 +36,11 @@ struct AppTileView: View {
         .background(tileBackground)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(
-            // Active indicator — bottom accent line
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isDropTarget ? Color.accentColor : Color.clear, lineWidth: 2)
+        )
+        .overlay(
+            // Bottom indicator: active accent bar or running dot
             VStack {
                 Spacer()
                 if isActive {
@@ -39,8 +48,7 @@ struct AppTileView: View {
                         .fill(Color.accentColor)
                         .frame(height: 2)
                         .padding(.horizontal, 8)
-                } else {
-                    // Running dot indicator
+                } else if app.isRunning {
                     Circle()
                         .fill(Color.secondary.opacity(0.5))
                         .frame(width: 4, height: 4)
@@ -48,12 +56,15 @@ struct AppTileView: View {
                 }
             }
         )
-        .opacity(app.isHidden ? 0.5 : 1.0)
+        .opacity(app.isHidden ? 0.5 : (app.isRunning ? 1.0 : 0.85))
         .onHover { hovering in
             isHovered = hovering
         }
         .onTapGesture {
             onTap()
+        }
+        .onDrop(of: [.fileURL], isTargeted: $isDropTarget) { providers in
+            handleDrop(providers: providers)
         }
         .contextMenu {
             appContextMenu
@@ -65,7 +76,9 @@ struct AppTileView: View {
 
     private var tileBackground: some View {
         Group {
-            if isActive {
+            if isDropTarget {
+                Color.accentColor.opacity(0.2)
+            } else if isActive {
                 Color.primary.opacity(0.12)
             } else if isHovered {
                 Color.primary.opacity(0.06)
@@ -77,17 +90,36 @@ struct AppTileView: View {
 
     @ViewBuilder
     private var appContextMenu: some View {
-        Button("Show All Windows") {
-            AppActionService.shared.activateApp(app)
-        }
+        if app.isRunning {
+            Button("Show All Windows") {
+                AppActionService.shared.activateApp(app)
+            }
 
-        if app.isHidden {
-            Button("Unhide") {
-                AppActionService.shared.unhideApp(app)
+            if app.isHidden {
+                Button("Unhide") {
+                    AppActionService.shared.unhideApp(app)
+                }
+            } else {
+                Button("Hide") {
+                    AppActionService.shared.hideApp(app)
+                }
             }
         } else {
-            Button("Hide") {
-                AppActionService.shared.hideApp(app)
+            Button("Open") {
+                AppActionService.shared.launchApp(app)
+            }
+        }
+
+        Divider()
+
+        // Pin / Unpin
+        if app.isPinned {
+            Button("Unpin from Taskbar") {
+                AppActionService.shared.togglePin(for: app)
+            }
+        } else {
+            Button("Pin to Taskbar") {
+                AppActionService.shared.togglePin(for: app)
             }
         }
 
@@ -97,19 +129,25 @@ struct AppTileView: View {
             AppActionService.shared.showInFinder(app)
         }
 
-        Divider()
+        if app.isRunning {
+            Divider()
 
-        Button("Quit \(app.localizedName)") {
-            AppActionService.shared.quitApp(app)
-        }
+            Button("Quit \(app.localizedName)") {
+                AppActionService.shared.quitApp(app)
+            }
 
-        Button("Force Quit") {
-            AppActionService.shared.forceQuitApp(app)
+            Button("Force Quit") {
+                AppActionService.shared.forceQuitApp(app)
+            }
         }
     }
 
     private var tooltipText: String {
         var tooltip = app.localizedName
+        if !app.isRunning {
+            tooltip += " (Pinned)"
+            return tooltip
+        }
         if app.isHidden {
             tooltip += " (Hidden)"
         }
@@ -118,5 +156,30 @@ struct AppTileView: View {
             tooltip += " — \(windowCount) window\(windowCount == 1 ? "" : "s")"
         }
         return tooltip
+    }
+
+    // MARK: - Drag & Drop Handling
+
+    private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        var urls: [URL] = []
+        let group = DispatchGroup()
+
+        for provider in providers {
+            group.enter()
+            _ = provider.loadObject(ofClass: URL.self) { url, _ in
+                if let url = url {
+                    urls.append(url)
+                }
+                group.leave()
+            }
+        }
+
+        group.notify(queue: .main) {
+            if !urls.isEmpty {
+                AppActionService.shared.openFiles(urls, with: self.app)
+            }
+        }
+
+        return true
     }
 }
