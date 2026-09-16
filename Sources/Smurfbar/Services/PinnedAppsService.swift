@@ -88,6 +88,19 @@ class PinnedAppsService: ObservableObject {
         }
     }
 
+    func movePinnedApp(fromIndex: Int, toIndex: Int) {
+        guard fromIndex >= 0, fromIndex < pinnedApps.count,
+              toIndex >= 0, toIndex < pinnedApps.count,
+              fromIndex != toIndex else { return }
+        let item = pinnedApps.remove(at: fromIndex)
+        pinnedApps.insert(item, at: toIndex)
+    }
+
+    func movePinnedApp(bundleIdentifier: String, toIndex: Int) {
+        guard let currentIndex = pinnedApps.firstIndex(where: { $0.bundleIdentifier == bundleIdentifier }) else { return }
+        movePinnedApp(fromIndex: currentIndex, toIndex: toIndex)
+    }
+
     // MARK: - Launching
 
     func launchApp(_ pinnedApp: PinnedApp) {

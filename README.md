@@ -23,8 +23,12 @@ Smurfbar brings a bottom-docked, classic taskbar experience to macOS with native
   - Running indicator dots and active app accent bars.
   - Window count badges for multi-window applications.
   - One-click window activation and toggle minimize/restore.
-- **Drag & Drop File Opening**:
+- **Drag & Drop File Opening & Taskbar Reordering**:
   - Drag files directly from Finder onto app tiles to open them with that application.
+  - Drag and drop app and window tiles directly along the taskbar to arrange workflows and reorder pinned/running apps.
+- **Windows 11 Snap Layouts Bar**:
+  - Drag any window towards the top of the screen to reveal the floating Snap Layouts bar.
+  - Choose between 6 workflow templates (50/50 split, 67/33 priority focus, 3 columns, focus + stack, and 4-quadrant grid) to instantly tile and arrange multi-window workflows.
 - **Live Window Previews**: Hover over any running app tile to view live window thumbnails and click to switch directly to a specific window.
 - **Interactive Calendar & Clock**:
   - Built-in digital clock updating live every second.
@@ -104,6 +108,8 @@ swift build
 | **Window Previews** | Hover mouse over app tile |
 | **Switch to Specific Window** | Click thumbnail inside hover preview |
 | **Open File with App** | Drag & drop file onto app tile |
+| **Reorder Taskbar Tiles** | Drag & drop app tile to new position on taskbar |
+| **Snap Layouts Drop Bar** | Drag window to top center of screen |
 | **Pin / Unpin App** | Right-click app tile → **Pin / Unpin from Taskbar** |
 | **App Management Menu** | Right-click app tile |
 | **Open Calendar** | Click clock (bottom-right) |

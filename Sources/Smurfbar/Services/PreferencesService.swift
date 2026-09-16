@@ -126,6 +126,7 @@ class PreferencesService: ObservableObject {
     private let keyTaskbarOpacity = "Smurfbar_TaskbarOpacity"
     private let keyAccentColor = "Smurfbar_AccentColor"
     private let keyEnableWindowSnapping = "Smurfbar_EnableWindowSnapping"
+    private let keyEnableSnapLayoutsBar = "Smurfbar_EnableSnapLayoutsBar"
     private let keyMultiMonitorMode = "Smurfbar_MultiMonitorMode"
     private let keyShowOverflowArrows = "Smurfbar_ShowOverflowArrows"
     private let keyWindowGroupingMode = "Smurfbar_WindowGroupingMode"
@@ -185,6 +186,10 @@ class PreferencesService: ObservableObject {
 
     @Published var enableWindowSnapping: Bool {
         didSet { defaults.set(enableWindowSnapping, forKey: keyEnableWindowSnapping) }
+    }
+
+    @Published var enableSnapLayoutsBar: Bool {
+        didSet { defaults.set(enableSnapLayoutsBar, forKey: keyEnableSnapLayoutsBar) }
     }
 
     @Published var multiMonitorMode: MultiMonitorMode {
@@ -287,6 +292,7 @@ class PreferencesService: ObservableObject {
         self.accentColorChoice = AccentColorOption(rawValue: accentRaw) ?? .system
 
         self.enableWindowSnapping = defaults.object(forKey: keyEnableWindowSnapping) == nil ? true : defaults.bool(forKey: keyEnableWindowSnapping)
+        self.enableSnapLayoutsBar = defaults.object(forKey: keyEnableSnapLayoutsBar) == nil ? true : defaults.bool(forKey: keyEnableSnapLayoutsBar)
 
         let monitorRaw = defaults.string(forKey: keyMultiMonitorMode) ?? MultiMonitorMode.allMonitors.rawValue
         self.multiMonitorMode = MultiMonitorMode(rawValue: monitorRaw) ?? .allMonitors

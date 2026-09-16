@@ -10,6 +10,7 @@ class AppMonitor: ObservableObject {
     private var observers: [NSObjectProtocol] = []
     private var cancellables = Set<AnyCancellable>()
     private var windowRefreshTimer: Timer?
+    private var customRunningOrder: [String] = []
 
     init() {}
 
@@ -151,8 +152,17 @@ class AppMonitor: ObservableObject {
             }
         }
 
-        // 2. Add non-pinned running apps
-        for running in systemRunningApps where !processedRunningPIDs.contains(running.processIdentifier) {
+        // 2. Add non-pinned running apps (preserving any custom reordered sequence)
+        let unpinnedRunning = systemRunningApps.filter { !processedRunningPIDs.contains($0.processIdentifier) }
+        let sortedUnpinned = unpinnedRunning.sorted { a, b in
+            let idA = a.bundleIdentifier ?? "\(a.processIdentifier)"
+            let idB = b.bundleIdentifier ?? "\(b.processIdentifier)"
+            let idxA = customRunningOrder.firstIndex(of: idA) ?? Int.max
+            let idxB = customRunningOrder.firstIndex(of: idB) ?? Int.max
+            return idxA < idxB
+        }
+
+        for running in sortedUnpinned {
             let itemId = running.bundleIdentifier ?? "\(running.processIdentifier)"
             if let existing = existingById[itemId] {
                 existing.isPinned = false
@@ -275,5 +285,35 @@ class AppMonitor: ObservableObject {
                 return items
             }
         }
+    }
+
+    // MARK: - Drag & Drop Item Reordering
+
+    func moveItem(sourceID: String, targetID: String) {
+        guard sourceID != targetID else { return }
+
+        // Extract base app ID if item is a window tile (id format: <app.id>_win_<window.id>)
+        let cleanSourceID = sourceID.components(separatedBy: "_win_").first ?? sourceID
+        let cleanTargetID = targetID.components(separatedBy: "_win_").first ?? targetID
+
+        let pinnedService = PinnedAppsService.shared
+        // If both items are pinned, reorder inside PinnedAppsService
+        if pinnedService.isPinned(bundleIdentifier: cleanSourceID),
+           pinnedService.isPinned(bundleIdentifier: cleanTargetID) {
+            if let targetIdx = pinnedService.pinnedApps.firstIndex(where: { $0.bundleIdentifier == cleanTargetID }) {
+                pinnedService.movePinnedApp(bundleIdentifier: cleanSourceID, toIndex: targetIdx)
+                return
+            }
+        }
+
+        // Otherwise reorder runningApps array directly
+        guard let sourceIndex = runningApps.firstIndex(where: { $0.id == cleanSourceID }),
+              let targetIndex = runningApps.firstIndex(where: { $0.id == cleanTargetID }) else { return }
+
+        let moved = runningApps.remove(at: sourceIndex)
+        runningApps.insert(moved, at: targetIndex)
+
+        // Persist order cache
+        customRunningOrder = runningApps.map { $0.id }
     }
 }

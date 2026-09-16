@@ -27,6 +27,7 @@ class SnapZoneService {
             mouseMonitor = nil
         }
         SnapOverlayWindow.shared.hide()
+        SnapLayoutsBarWindow.shared.hide()
         currentTargetFrame = nil
         isDragging = false
     }
@@ -35,6 +36,7 @@ class SnapZoneService {
         guard PreferencesService.shared.enableWindowSnapping else {
             if currentTargetFrame != nil {
                 SnapOverlayWindow.shared.hide()
+                SnapLayoutsBarWindow.shared.hide()
                 currentTargetFrame = nil
             }
             return
@@ -44,7 +46,40 @@ class SnapZoneService {
             isDragging = true
             let mouse = NSEvent.mouseLocation
             guard let screen = NSScreen.screens.first(where: { $0.frame.contains(mouse) }) else { return }
+            let usable = usableScreenFrame(on: screen)
 
+            // 1. Windows 11 Snap Layouts Drop Bar Check
+            if PreferencesService.shared.enableSnapLayoutsBar {
+                let screenFrame = screen.frame
+                let cornerThreshold: CGFloat = 80.0
+                let isTopZone = mouse.y >= screenFrame.maxY - 60 &&
+                                mouse.x > screenFrame.minX + cornerThreshold &&
+                                mouse.x < screenFrame.maxX - cornerThreshold
+                let isInsideBar = SnapLayoutsBarWindow.shared.isVisibleOnScreen &&
+                                  SnapLayoutsBarWindow.shared.frame.insetBy(dx: -15, dy: -20).contains(mouse)
+
+                if isTopZone || isInsideBar {
+                    if !SnapLayoutsBarWindow.shared.isVisibleOnScreen {
+                        SnapLayoutsBarWindow.shared.show(on: screen)
+                    }
+
+                    if let (_, target) = SnapLayoutsBarWindow.shared.hitTestZone(at: mouse, on: screen, usable: usable) {
+                        currentTargetFrame = target
+                        SnapOverlayWindow.shared.show(in: target)
+                        return
+                    } else if SnapLayoutsBarWindow.shared.frame.contains(mouse) {
+                        // Inside the bar header/margins, clear overlay until hovered over a zone
+                        SnapOverlayWindow.shared.hide()
+                        currentTargetFrame = nil
+                        return
+                    }
+                } else if mouse.y < screenFrame.maxY - 130 {
+                    // Dragged away from the top area
+                    SnapLayoutsBarWindow.shared.hide()
+                }
+            }
+
+            // 2. Fallback to classic Aero Snap edges & corners
             if let target = evaluateSnapZone(mouse: mouse, on: screen) {
                 currentTargetFrame = target
                 SnapOverlayWindow.shared.show(in: target)
@@ -62,6 +97,7 @@ class SnapZoneService {
                 }
             }
             SnapOverlayWindow.shared.hide()
+            SnapLayoutsBarWindow.shared.hide()
             currentTargetFrame = nil
             isDragging = false
         }

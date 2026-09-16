@@ -12,21 +12,23 @@ struct AppTileView: View {
     let onTap: () -> Void
     let onRightClick: () -> Void
     var onHover: ((Bool) -> Void)? = nil
+    var onReorder: ((String) -> Void)? = nil
 
     @State private var isHovered: Bool = false
     @State private var isDropTarget: Bool = false
 
-    init(item: TaskbarItem, isActive: Bool, onTap: @escaping () -> Void, onRightClick: @escaping () -> Void, onHover: ((Bool) -> Void)? = nil) {
+    init(item: TaskbarItem, isActive: Bool, onTap: @escaping () -> Void, onRightClick: @escaping () -> Void, onHover: ((Bool) -> Void)? = nil, onReorder: ((String) -> Void)? = nil) {
         self.item = item
         self.app = item.runningApp
         self.isActive = isActive
         self.onTap = onTap
         self.onRightClick = onRightClick
         self.onHover = onHover
+        self.onReorder = onReorder
     }
 
-    init(app: RunningApp, isActive: Bool, onTap: @escaping () -> Void, onRightClick: @escaping () -> Void, onHover: ((Bool) -> Void)? = nil) {
-        self.init(item: TaskbarItem(app: app), isActive: isActive, onTap: onTap, onRightClick: onRightClick, onHover: onHover)
+    init(app: RunningApp, isActive: Bool, onTap: @escaping () -> Void, onRightClick: @escaping () -> Void, onHover: ((Bool) -> Void)? = nil, onReorder: ((String) -> Void)? = nil) {
+        self.init(item: TaskbarItem(app: app), isActive: isActive, onTap: onTap, onRightClick: onRightClick, onHover: onHover, onReorder: onReorder)
     }
 
     var body: some View {
@@ -92,7 +94,10 @@ struct AppTileView: View {
             isHovered = hovering
             onHover?(hovering)
         }
-        .onDrop(of: [.fileURL], isTargeted: $isDropTarget) { providers in
+        .onDrag {
+            NSItemProvider(object: "smurfbar-tile:\(item.id)" as NSString)
+        }
+        .onDrop(of: [.plainText, .fileURL], isTargeted: $isDropTarget) { providers in
             handleDrop(providers: providers)
         }
         .contextMenu {
@@ -273,6 +278,19 @@ struct AppTileView: View {
     // MARK: - Drag & Drop Handling
 
     private func handleDrop(providers: [NSItemProvider]) -> Bool {
+        // 1. Check for taskbar tile reordering
+        for provider in providers {
+            _ = provider.loadObject(ofClass: String.self) { string, _ in
+                if let str = string, str.hasPrefix("smurfbar-tile:") {
+                    let sourceID = str.replacingOccurrences(of: "smurfbar-tile:", with: "")
+                    DispatchQueue.main.async {
+                        self.onReorder?(sourceID)
+                    }
+                }
+            }
+        }
+
+        // 2. Check for Finder file URLs
         var urls: [URL] = []
         let group = DispatchGroup()
 

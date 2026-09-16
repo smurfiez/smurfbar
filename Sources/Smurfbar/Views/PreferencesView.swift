@@ -71,6 +71,12 @@ struct PreferencesView: View {
 
                 Toggle("Enable Window Snapping (Aero Snap)", isOn: $prefs.enableWindowSnapping)
                     .help("Drag windows to screen edges or use Ctrl+Arrow to tile windows")
+
+                if prefs.enableWindowSnapping {
+                    Toggle("Show Snap Layouts Drop Bar", isOn: $prefs.enableSnapLayoutsBar)
+                        .help("Show Windows 11 Snap Layouts bar at the top of the screen when dragging windows to organize workflows")
+                        .padding(.leading, 12)
+                }
             }
 
             Section(header: Text("Grouping & Search")) {

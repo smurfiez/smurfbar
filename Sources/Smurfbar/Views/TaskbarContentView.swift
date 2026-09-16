@@ -149,6 +149,11 @@ struct TaskbarContentView: View {
                             onRightClick: {},
                             onHover: { hovering in
                                 handleAppHover(app: item.runningApp, hovering: hovering)
+                            },
+                            onReorder: { sourceID in
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    appMonitor.moveItem(sourceID: sourceID, targetID: item.id)
+                                }
                             }
                         )
                         .id(item.id)
@@ -232,6 +237,11 @@ struct TaskbarContentView: View {
                                 },
                                 onHover: { hovering in
                                     handleAppHover(app: item.runningApp, hovering: hovering)
+                                },
+                                onReorder: { sourceID in
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        appMonitor.moveItem(sourceID: sourceID, targetID: item.id)
+                                    }
                                 }
                             )
                             .id(item.id)
