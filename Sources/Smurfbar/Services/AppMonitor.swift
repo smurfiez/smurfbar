@@ -202,4 +202,26 @@ class AppMonitor: ObservableObject {
             app.isHidden = isHidden
         }
     }
+
+    /// Return apps relevant for a specific display screen
+    func apps(for screen: NSScreen?) -> [RunningApp] {
+        guard let screen = screen else { return runningApps }
+        let isPrimary = (screen == NSScreen.main || screen == NSScreen.screens.first)
+
+        return runningApps.filter { app in
+            // Pinned apps always display on all taskbars
+            if app.isPinned { return true }
+
+            // If app has no tracked windows (e.g. background or just launched), display on primary screen
+            if app.windows.isEmpty {
+                return isPrimary
+            }
+
+            // Check if any of the app's windows lie on this screen
+            let screenFrame = screen.frame
+            return app.windows.contains { window in
+                screenFrame.intersects(window.bounds)
+            }
+        }
+    }
 }

@@ -28,7 +28,7 @@ struct PreferencesView: View {
                     Label("About", systemImage: "info.circle")
                 }
         }
-        .frame(width: 480, height: 350)
+        .frame(width: 500, height: 420)
         .padding()
         .onAppear {
             screenCaptureService.checkPermission()
@@ -44,7 +44,7 @@ struct PreferencesView: View {
                     .help("Automatically start Smurfbar when you log in")
 
                 Toggle("Auto-hide Taskbar", isOn: $prefs.autoHide)
-                    .help("Hide the taskbar when the cursor moves away from the bottom of the screen")
+                    .help("Hide the taskbar when the cursor moves away from the edge of the screen")
 
                 Toggle("Compact Taskbar Height", isOn: $prefs.compactMode)
                     .help("Reduce taskbar height from 48px to 40px")
@@ -54,6 +54,20 @@ struct PreferencesView: View {
 
                 Toggle("Show Live Window Previews", isOn: $prefs.showWindowPreviews)
                     .help("Display window thumbnails when hovering over application tiles")
+
+                Toggle("Enable Window Snapping (Aero Snap)", isOn: $prefs.enableWindowSnapping)
+                    .help("Drag windows to screen edges or use Ctrl+Arrow to tile windows")
+
+                Toggle("Show Overflow Navigation Arrows", isOn: $prefs.showOverflowArrows)
+                    .help("Show scroll arrow buttons when there are many open apps")
+
+                Picker("Multi-Monitor Mode", selection: $prefs.multiMonitorMode) {
+                    ForEach(MultiMonitorMode.allCases) { mode in
+                        Text(mode.rawValue).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.top, 4)
 
                 if prefs.showWindowPreviews && !screenCaptureService.isPermissionGranted {
                     HStack(spacing: 8) {
@@ -75,26 +89,51 @@ struct PreferencesView: View {
                 }
             }
         }
-        .padding(20)
+        .padding(16)
     }
 
     private var appearanceTab: some View {
         Form {
-            Section(header: Text("Taskbar Theme")) {
+            Section(header: Text("Theme & Layout")) {
                 Picker("Theme Mode", selection: $prefs.theme) {
                     ForEach(ThemeMode.allCases) { mode in
                         Text(mode.rawValue).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
-                .padding(.vertical, 8)
 
-                Text("System mode uses the native macOS appearance, while Dark and Light force specific translucent materials.")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Picker("Taskbar Position", selection: $prefs.taskbarPosition) {
+                    ForEach(TaskbarPosition.allCases) { pos in
+                        Text(pos.rawValue).tag(pos)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Picker("Item Alignment", selection: $prefs.taskbarAlignment) {
+                    ForEach(TaskbarAlignment.allCases) { align in
+                        Text(align.rawValue).tag(align)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Section(header: Text("Styling")) {
+                HStack {
+                    Text("Opacity: \(Int(prefs.taskbarOpacity * 100))%")
+                    Slider(value: $prefs.taskbarOpacity, in: 0.35...1.0)
+                }
+
+                Picker("Accent Color", selection: $prefs.accentColorChoice) {
+                    ForEach(AccentColorOption.allCases) { opt in
+                        HStack {
+                            Circle().fill(opt.color).frame(width: 8, height: 8)
+                            Text(opt.rawValue)
+                        }.tag(opt)
+                    }
+                }
             }
         }
-        .padding(20)
+        .padding(16)
     }
 
     private var pinnedAppsTab: some View {
@@ -142,11 +181,11 @@ struct PreferencesView: View {
                 .font(.title2)
                 .fontWeight(.bold)
 
-            Text("Version 0.2.0 (Phase 2)")
+            Text("Version 0.4.0 (Phase 4)")
                 .font(.subheadline)
                 .foregroundColor(.secondary)
 
-            Text("A sleek, lightweight Windows-style taskbar for macOS.")
+            Text("A sleek, lightweight Windows-style taskbar and desktop manager for macOS.")
                 .font(.caption)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)

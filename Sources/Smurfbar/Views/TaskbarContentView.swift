@@ -37,11 +37,11 @@ struct TaskbarContentView: View {
                             },
                             onRightClick: {
                                 // Context menu is handled via SwiftUI .contextMenu
+                            },
+                            onHover: { hovering in
+                                handleAppHover(app: app, hovering: hovering)
                             }
                         )
-                        .onHover { hovering in
-                            handleAppHover(app: app, hovering: hovering)
-                        }
                     }
                 }
                 .padding(.horizontal, 4)

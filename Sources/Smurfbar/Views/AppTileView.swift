@@ -9,6 +9,7 @@ struct AppTileView: View {
     let isActive: Bool
     let onTap: () -> Void
     let onRightClick: () -> Void
+    var onHover: ((Bool) -> Void)? = nil
 
     @State private var isHovered: Bool = false
     @State private var isDropTarget: Bool = false
@@ -57,8 +58,10 @@ struct AppTileView: View {
             }
         )
         .opacity(app.isHidden ? 0.5 : (app.isRunning ? 1.0 : 0.85))
+        .contentShape(Rectangle())
         .onHover { hovering in
             isHovered = hovering
+            onHover?(hovering)
         }
         .onTapGesture {
             onTap()
@@ -69,7 +72,7 @@ struct AppTileView: View {
         .contextMenu {
             appContextMenu
         }
-        .help(tooltipText)
+        .help(prefs.showWindowPreviews && app.isRunning && !app.windows.isEmpty ? "" : tooltipText)
     }
 
     // MARK: - Subviews

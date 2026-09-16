@@ -41,6 +41,10 @@ if [ -f "$PROJECT_DIR/Resources/AppIcon.icns" ]; then
     cp "$PROJECT_DIR/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 fi
 
+# Sign the app bundle so macOS TCC recognizes its bundle identifier and Info.plist
+echo "🔏 Signing app bundle..."
+codesign --force --deep --sign - "$APP_BUNDLE"
+
 echo "✅ App bundle created at: $APP_BUNDLE"
 echo ""
 echo "To run:"
