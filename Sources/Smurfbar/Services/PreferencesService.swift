@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import ServiceManagement
 
 /// Available theme modes for the taskbar
 enum ThemeMode: String, CaseIterable, Identifiable, Codable {
@@ -59,6 +60,12 @@ class PreferencesService: ObservableObject {
         didSet { defaults.set(showAppLabels, forKey: keyShowAppLabels) }
     }
 
+    @Published var launchAtLogin: Bool {
+        didSet {
+            setLaunchAtLogin(launchAtLogin)
+        }
+    }
+
     var taskbarHeight: CGFloat {
         compactMode ? 40 : 48
     }
@@ -70,5 +77,29 @@ class PreferencesService: ObservableObject {
         self.showWindowPreviews = defaults.object(forKey: keyShowPreviews) == nil ? true : defaults.bool(forKey: keyShowPreviews)
         self.compactMode = defaults.bool(forKey: keyCompactMode)
         self.showAppLabels = defaults.object(forKey: keyShowAppLabels) == nil ? true : defaults.bool(forKey: keyShowAppLabels)
+
+        if #available(macOS 13.0, *) {
+            self.launchAtLogin = (SMAppService.mainApp.status == .enabled)
+        } else {
+            self.launchAtLogin = false
+        }
+    }
+
+    private func setLaunchAtLogin(_ enabled: Bool) {
+        if #available(macOS 13.0, *) {
+            do {
+                if enabled {
+                    if SMAppService.mainApp.status != .enabled {
+                        try SMAppService.mainApp.register()
+                    }
+                } else {
+                    if SMAppService.mainApp.status == .enabled {
+                        try SMAppService.mainApp.unregister()
+                    }
+                }
+            } catch {
+                print("⚠️ Failed to update launchAtLogin status: \(error)")
+            }
+        }
     }
 }

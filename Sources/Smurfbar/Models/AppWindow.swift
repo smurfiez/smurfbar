@@ -47,6 +47,9 @@ struct AppWindow: Identifiable, Equatable {
         // Skip tiny windows (likely helper windows, not real UI)
         guard width > 50 && height > 50 else { return nil }
 
+        // Real user windows are either currently on screen or, if offscreen/minimized, have a non-empty title
+        guard isOnScreen || !title.trimmingCharacters(in: .whitespaces).isEmpty else { return nil }
+
         self.init(windowID: windowID, title: title, bounds: bounds,
                   isOnScreen: isOnScreen, ownerPID: ownerPID, windowLayer: layer)
     }

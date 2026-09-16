@@ -24,6 +24,8 @@
     <true/>
     <key>NSAccessibilityUsageDescription</key>
     <string>Smurfbar needs Accessibility access to monitor running applications, enumerate windows, and capture window thumbnails for the taskbar display.</string>
+    <key>NSScreenCaptureUsageDescription</key>
+    <string>Smurfbar needs Screen Recording permission to display live window thumbnail previews in the taskbar.</string>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 Smurf. All rights reserved.</string>
     <key>NSHighResolutionCapable</key>

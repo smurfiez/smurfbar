@@ -37,9 +37,17 @@ struct WindowPreviewView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
                         ForEach(app.windows) { window in
-                            WindowThumbnailView(window: window) {
-                                onWindowSelect(window)
-                            }
+                            WindowThumbnailView(
+                                window: window,
+                                onSelect: {
+                                    onWindowSelect(window)
+                                },
+                                onClose: {
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                        WindowPreviewWindowController.shared.closePreview()
+                                    }
+                                }
+                            )
                         }
                     }
                     .padding(.horizontal, 8)
@@ -47,48 +55,69 @@ struct WindowPreviewView: View {
                 }
             }
         }
-        .frame(minWidth: 200, maxWidth: 500)
+        .frame(minWidth: 200, maxWidth: 560)
         .background(
             VisualEffectBlur(material: .popover, blendingMode: .behindWindow)
         )
         .clipShape(RoundedRectangle(cornerRadius: 10))
-        .shadow(color: .black.opacity(0.2), radius: 12, y: -4)
+        .shadow(color: .black.opacity(0.25), radius: 12, y: -4)
+        .onHover { hovering in
+            WindowPreviewWindowController.shared.setMouseOverPreview(hovering)
+        }
     }
 }
 
-/// A single window thumbnail with title.
+/// A single window thumbnail with title and hover close button.
 struct WindowThumbnailView: View {
     let window: AppWindow
     let onSelect: () -> Void
+    var onClose: (() -> Void)? = nil
 
     @State private var thumbnail: NSImage?
     @State private var isHovered: Bool = false
 
     var body: some View {
         VStack(spacing: 4) {
-            // Thumbnail
-            Group {
-                if let thumbnail = thumbnail {
-                    Image(nsImage: thumbnail)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: 200, maxHeight: 130)
-                } else {
-                    RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.secondary.opacity(0.1))
-                        .frame(width: 160, height: 100)
-                        .overlay(
-                            Image(systemName: "macwindow")
-                                .font(.system(size: 24))
-                                .foregroundColor(.secondary.opacity(0.4))
-                        )
+            // Thumbnail container with close button overlay
+            ZStack(alignment: .topTrailing) {
+                Group {
+                    if let thumbnail = thumbnail {
+                        Image(nsImage: thumbnail)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(maxWidth: 200, maxHeight: 130)
+                    } else {
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color.secondary.opacity(0.1))
+                            .frame(width: 160, height: 100)
+                            .overlay(
+                                Image(systemName: "macwindow")
+                                    .font(.system(size: 24))
+                                    .foregroundColor(.secondary.opacity(0.4))
+                            )
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(isHovered ? Color.accentColor : Color.clear, lineWidth: 2)
+                )
+
+                // Close Button (visible when hovered)
+                if isHovered {
+                    Button(action: {
+                        _ = AccessibilityService.shared.closeWindow(pid: window.ownerPID, windowTitle: window.title)
+                        onClose?()
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 15))
+                            .foregroundColor(.white)
+                            .shadow(color: .black.opacity(0.7), radius: 2)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(4)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 6))
-            .overlay(
-                RoundedRectangle(cornerRadius: 6)
-                    .stroke(isHovered ? Color.accentColor : Color.clear, lineWidth: 2)
-            )
 
             // Window title
             Text(window.title.isEmpty ? "Untitled" : window.title)

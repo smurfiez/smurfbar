@@ -95,8 +95,8 @@ class AppActionService {
         }
     }
 
-    /// Activate a specific window by its title.
-    func activateWindow(for app: RunningApp, windowTitle: String) {
+    /// Activate a specific window by its title and/or CGWindowID.
+    func activateWindow(for app: RunningApp, windowTitle: String, windowID: CGWindowID? = nil) {
         guard let pid = app.pid else {
             activateApp(app)
             return
@@ -104,7 +104,8 @@ class AppActionService {
 
         let success = AccessibilityService.shared.raiseWindow(
             pid: pid,
-            windowTitle: windowTitle
+            windowTitle: windowTitle,
+            windowID: windowID
         )
         if !success {
             activateApp(app)

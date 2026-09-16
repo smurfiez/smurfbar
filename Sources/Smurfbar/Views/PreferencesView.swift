@@ -4,6 +4,7 @@ import SwiftUI
 struct PreferencesView: View {
     @ObservedObject var prefs = PreferencesService.shared
     @ObservedObject var pinnedService = PinnedAppsService.shared
+    @ObservedObject var screenCaptureService = ScreenCaptureService.shared
 
     var body: some View {
         TabView {
@@ -27,8 +28,11 @@ struct PreferencesView: View {
                     Label("About", systemImage: "info.circle")
                 }
         }
-        .frame(width: 460, height: 320)
+        .frame(width: 480, height: 350)
         .padding()
+        .onAppear {
+            screenCaptureService.checkPermission()
+        }
     }
 
     // MARK: - Tabs
@@ -36,6 +40,9 @@ struct PreferencesView: View {
     private var generalTab: some View {
         Form {
             Section {
+                Toggle("Launch Smurfbar at Login", isOn: $prefs.launchAtLogin)
+                    .help("Automatically start Smurfbar when you log in")
+
                 Toggle("Auto-hide Taskbar", isOn: $prefs.autoHide)
                     .help("Hide the taskbar when the cursor moves away from the bottom of the screen")
 
@@ -47,6 +54,25 @@ struct PreferencesView: View {
 
                 Toggle("Show Live Window Previews", isOn: $prefs.showWindowPreviews)
                     .help("Display window thumbnails when hovering over application tiles")
+
+                if prefs.showWindowPreviews && !screenCaptureService.isPermissionGranted {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.orange)
+                        Text("Screen Recording permission is needed for live previews.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Button("Grant Access") {
+                            screenCaptureService.requestPermission()
+                            screenCaptureService.openScreenRecordingSettings()
+                        }
+                        .font(.caption)
+                    }
+                    .padding(8)
+                    .background(Color.orange.opacity(0.1))
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                }
             }
         }
         .padding(20)

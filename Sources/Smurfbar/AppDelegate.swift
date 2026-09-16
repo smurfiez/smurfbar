@@ -14,6 +14,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             showAccessibilityAlert()
         }
 
+        // 2. Check and request Screen Recording permissions (needed for live window previews)
+        if !ScreenCaptureService.shared.checkPermission() {
+            ScreenCaptureService.shared.requestPermission()
+        }
+
         // 2. Initialize the app monitor
         appMonitor = AppMonitor()
         appMonitor.startMonitoring()

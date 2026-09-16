@@ -13,10 +13,10 @@ class WindowListService {
         return getAllWindows().filter { $0.ownerPID == pid }
     }
 
-    /// Get all normal windows on screen, grouped by owning PID.
+    /// Get all normal windows on screen and offscreen (e.g. minimized), grouped by owning PID.
     func getAllWindows() -> [AppWindow] {
         guard let windowInfoList = CGWindowListCopyWindowInfo(
-            [.optionOnScreenOnly, .excludeDesktopElements],
+            [.excludeDesktopElements],
             kCGNullWindowID
         ) as? [[String: Any]] else {
             return []

@@ -6,11 +6,13 @@ import Combine
 struct TaskbarContentView: View {
     @ObservedObject var appMonitor: AppMonitor
     @ObservedObject var prefs = PreferencesService.shared
+    @ObservedObject var systemStatus = SystemStatusService.shared
 
-    @State private var hoveredAppPID: pid_t? = nil
-    @State private var hoverTimer: Timer? = nil
     @State private var currentDate: Date = Date()
     @State private var isClockHovered: Bool = false
+    @State private var isTrayHovered: Bool = false
+    @State private var isShowDesktopHovered: Bool = false
+    @State private var isDesktopShown: Bool = false
 
     private let clockTimer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
 
@@ -79,9 +81,15 @@ struct TaskbarContentView: View {
     }
 
     private var systemArea: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             Divider()
-                .frame(height: prefs.compactMode ? 22 : 28)
+                .frame(height: prefs.compactMode ? 20 : 26)
+
+            // System Tray Indicators (Wi-Fi, Volume, Battery)
+            systemTrayButtons
+
+            Divider()
+                .frame(height: prefs.compactMode ? 18 : 22)
 
             // Interactive Clock Button
             Button(action: {
@@ -100,8 +108,96 @@ struct TaskbarContentView: View {
             .buttonStyle(.plain)
             .help(dateString(from: currentDate))
             .onHover { isClockHovered = $0 }
+
+            // Show Desktop Peek Strip (Far Right Edge)
+            showDesktopStrip
         }
-        .padding(.trailing, 4)
+        .padding(.trailing, 2)
+    }
+
+    private var systemTrayButtons: some View {
+        Button(action: {
+            if let screen = NSScreen.main ?? NSScreen.screens.first {
+                QuickSettingsWindowController.shared.toggle(relativeTo: screen) {
+                    PreferencesWindowController.shared.showPreferences()
+                }
+            }
+        }) {
+            HStack(spacing: 6) {
+                // Wi-Fi Icon
+                Image(systemName: systemStatus.wifi.iconName)
+                    .font(.system(size: 11))
+                    .foregroundColor(systemStatus.wifi.isConnected ? .primary : .secondary)
+
+                // Volume Icon
+                Image(systemName: volumeTrayIconName)
+                    .font(.system(size: 11))
+                    .foregroundColor(systemStatus.isMuted ? .secondary : .primary)
+
+                // Battery Icon & Percentage
+                HStack(spacing: 3) {
+                    Image(systemName: systemStatus.battery.iconName)
+                        .font(.system(size: 11))
+                        .foregroundColor(systemStatus.battery.percentage < 20 ? .red : .primary)
+                    if systemStatus.battery.hasBattery {
+                        Text("\(systemStatus.battery.percentage)%")
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
+            .padding(.horizontal, 6)
+            .padding(.vertical, 4)
+            .background(isTrayHovered ? Color.primary.opacity(0.08) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 4))
+        }
+        .buttonStyle(.plain)
+        .help("Quick Settings (Volume, Wi-Fi, Battery)")
+        .onHover { isTrayHovered = $0 }
+    }
+
+    private var volumeTrayIconName: String {
+        if systemStatus.isMuted || systemStatus.volume == 0 {
+            return "speaker.slash.fill"
+        } else if systemStatus.volume < 0.5 {
+            return "speaker.wave.1.fill"
+        } else {
+            return "speaker.wave.2.fill"
+        }
+    }
+
+    private var showDesktopStrip: some View {
+        Button(action: {
+            toggleShowDesktop()
+        }) {
+            Rectangle()
+                .fill(isShowDesktopHovered ? Color.primary.opacity(0.35) : Color.primary.opacity(0.12))
+                .frame(width: 5, height: prefs.compactMode ? 24 : 30)
+                .clipShape(RoundedRectangle(cornerRadius: 2))
+        }
+        .buttonStyle(.plain)
+        .help("Show Desktop")
+        .onHover { isShowDesktopHovered = $0 }
+        .padding(.leading, 2)
+    }
+
+    private func toggleShowDesktop() {
+        let workspace = NSWorkspace.shared
+        if !isDesktopShown {
+            for app in workspace.runningApplications {
+                if app.activationPolicy == .regular && app.bundleIdentifier != Bundle.main.bundleIdentifier {
+                    app.hide()
+                }
+            }
+            isDesktopShown = true
+        } else {
+            for app in workspace.runningApplications {
+                if app.activationPolicy == .regular && app.bundleIdentifier != Bundle.main.bundleIdentifier {
+                    app.unhide()
+                }
+            }
+            isDesktopShown = false
+        }
     }
 
     // MARK: - Time Formatting
@@ -123,9 +219,6 @@ struct TaskbarContentView: View {
 
     private func handleAppTap(_ app: RunningApp) {
         // Immediately dismiss any window preview without animation or delay
-        hoverTimer?.invalidate()
-        hoverTimer = nil
-        hoveredAppPID = nil
         WindowPreviewWindowController.shared.closePreview()
 
         // Toggle activation or launch
@@ -133,34 +226,13 @@ struct TaskbarContentView: View {
     }
 
     private func handleAppHover(app: RunningApp, hovering: Bool) {
-        guard prefs.showWindowPreviews, app.isRunning, !app.windows.isEmpty else {
-            WindowPreviewWindowController.shared.closePreview()
-            return
-        }
-
-        hoverTimer?.invalidate()
-
-        if hovering {
-            hoveredAppPID = app.pid
-            let mouseX = NSEvent.mouseLocation.x
-            // Show preview after a short debounce
-            hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { _ in
-                DispatchQueue.main.async {
-                    if self.hoveredAppPID == app.pid, let screen = NSScreen.main ?? NSScreen.screens.first {
-                        WindowPreviewWindowController.shared.showPreview(for: app, screenX: mouseX, on: screen)
-                    }
-                }
-            }
-        } else {
-            // Dismiss after a short delay so the user can move to preview thumbnails
-            hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) { _ in
-                DispatchQueue.main.async {
-                    if self.hoveredAppPID == app.pid {
-                        self.hoveredAppPID = nil
-                        WindowPreviewWindowController.shared.closePreview()
-                    }
-                }
-            }
-        }
+        let mouseX = NSEvent.mouseLocation.x
+        let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main ?? NSScreen.screens.first!
+        WindowPreviewWindowController.shared.handleTileHover(
+            app: app,
+            screenX: mouseX,
+            on: screen,
+            isHovering: hovering
+        )
     }
 }

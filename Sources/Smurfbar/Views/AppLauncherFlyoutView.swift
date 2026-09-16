@@ -8,6 +8,8 @@ struct AppLauncherFlyoutView: View {
     let onOpenPreferences: () -> Void
 
     @State private var searchQuery: String = ""
+    @State private var selectedIndex: Int = 0
+    @State private var keyMonitor: Any? = nil
     @FocusState private var isSearchFocused: Bool
 
     var filteredApps: [DiscoveredApp] {
@@ -38,6 +40,13 @@ struct AppLauncherFlyoutView: View {
         .shadow(color: .black.opacity(0.25), radius: 16, y: -6)
         .onAppear {
             isSearchFocused = true
+            setupKeyMonitor()
+        }
+        .onDisappear {
+            removeKeyMonitor()
+        }
+        .onChange(of: searchQuery) { _, _ in
+            selectedIndex = 0
         }
     }
 
@@ -53,8 +62,9 @@ struct AppLauncherFlyoutView: View {
                 .font(.system(size: 13))
                 .focused($isSearchFocused)
                 .onSubmit {
-                    if let firstApp = filteredApps.first {
-                        launchApp(firstApp)
+                    if !filteredApps.isEmpty {
+                        let validIndex = min(max(0, selectedIndex), filteredApps.count - 1)
+                        launchApp(filteredApps[validIndex])
                     }
                 }
 
@@ -73,37 +83,92 @@ struct AppLauncherFlyoutView: View {
     }
 
     private var appsSection: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            if discoveryService.isIndexing && discoveryService.apps.isEmpty {
-                VStack(spacing: 12) {
-                    ProgressView()
-                    Text("Loading applications...")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.top, 60)
-            } else if filteredApps.isEmpty {
-                VStack(spacing: 8) {
-                    Image(systemName: "questionmark.app.dashed")
-                        .font(.system(size: 28))
-                        .foregroundColor(.secondary.opacity(0.5))
-                    Text("No applications found")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.top, 60)
-            } else {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 4) {
-                    ForEach(filteredApps) { app in
-                        AppLauncherItemView(app: app) {
-                            launchApp(app)
+        ScrollViewReader { scrollProxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                if discoveryService.isIndexing && discoveryService.apps.isEmpty {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("Loading applications...")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.top, 60)
+                } else if filteredApps.isEmpty {
+                    VStack(spacing: 8) {
+                        Image(systemName: "questionmark.app.dashed")
+                            .font(.system(size: 28))
+                            .foregroundColor(.secondary.opacity(0.5))
+                        Text("No applications found")
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .padding(.top, 60)
+                } else {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 4) {
+                        ForEach(Array(filteredApps.enumerated()), id: \.element.id) { index, app in
+                            AppLauncherItemView(
+                                app: app,
+                                isSelected: index == selectedIndex
+                            ) {
+                                launchApp(app)
+                            }
+                            .id(app.id)
                         }
                     }
+                    .padding(8)
                 }
-                .padding(8)
             }
+            .onChange(of: selectedIndex) { _, newIndex in
+                if newIndex >= 0 && newIndex < filteredApps.count {
+                    scrollProxy.scrollTo(filteredApps[newIndex].id, anchor: .center)
+                }
+            }
+        }
+    }
+
+    private func setupKeyMonitor() {
+        removeKeyMonitor()
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { event in
+            let count = self.filteredApps.count
+            guard count > 0 else { return event }
+
+            switch event.keyCode {
+            case 126: // Up Arrow
+                if self.selectedIndex >= 2 {
+                    self.selectedIndex -= 2
+                } else {
+                    self.selectedIndex = 0
+                }
+                return nil
+            case 125: // Down Arrow
+                if self.selectedIndex + 2 < count {
+                    self.selectedIndex += 2
+                } else if self.selectedIndex + 1 < count {
+                    self.selectedIndex += 1
+                }
+                return nil
+            case 123: // Left Arrow
+                if self.selectedIndex > 0 {
+                    self.selectedIndex -= 1
+                }
+                return nil
+            case 124: // Right Arrow
+                if self.selectedIndex + 1 < count {
+                    self.selectedIndex += 1
+                }
+                return nil
+            default:
+                return event
+            }
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let monitor = keyMonitor {
+            NSEvent.removeMonitor(monitor)
+            keyMonitor = nil
         }
     }
 
@@ -200,6 +265,7 @@ struct AppLauncherFlyoutView: View {
 /// A single application item in the launcher grid.
 struct AppLauncherItemView: View {
     let app: DiscoveredApp
+    var isSelected: Bool = false
     let onSelect: () -> Void
 
     @State private var isHovered: Bool = false
@@ -212,7 +278,7 @@ struct AppLauncherItemView: View {
                 .frame(width: 24, height: 24)
 
             Text(app.name)
-                .font(.system(size: 12))
+                .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
                 .foregroundColor(.primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -221,7 +287,13 @@ struct AppLauncherItemView: View {
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(isHovered ? Color.primary.opacity(0.08) : Color.clear)
+        .background(
+            isSelected ? Color.accentColor.opacity(0.18) : (isHovered ? Color.primary.opacity(0.08) : Color.clear)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 1.5)
+        )
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .onHover { hovering in
             isHovered = hovering
