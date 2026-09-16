@@ -18,10 +18,10 @@ class AppActionService {
         if app.isActive {
             nsApp.hide()
         } else {
-            nsApp.activate()
             if app.isHidden {
                 nsApp.unhide()
             }
+            nsApp.activate()
         }
     }
 
@@ -31,7 +31,9 @@ class AppActionService {
             launchApp(app)
             return
         }
-        nsApp.unhide()
+        if app.isHidden {
+            nsApp.unhide()
+        }
         nsApp.activate()
     }
 

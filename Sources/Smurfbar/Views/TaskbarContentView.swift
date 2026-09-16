@@ -8,7 +8,6 @@ struct TaskbarContentView: View {
     @ObservedObject var prefs = PreferencesService.shared
 
     @State private var hoveredAppPID: pid_t? = nil
-    @State private var previewApp: RunningApp? = nil
     @State private var hoverTimer: Timer? = nil
     @State private var currentDate: Date = Date()
     @State private var isClockHovered: Bool = false
@@ -16,61 +15,43 @@ struct TaskbarContentView: View {
     private let clockTimer = Timer.publish(every: 1.0, on: .main, in: .common).autoconnect()
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            // Main taskbar bar
-            HStack(spacing: 2) {
-                // Smurfbar logo / Start menu button
-                smurfbarButton
+        HStack(spacing: 2) {
+            // Smurfbar logo / Start menu button
+            smurfbarButton
 
-                Divider()
-                    .frame(height: prefs.compactMode ? 22 : 28)
-                    .padding(.horizontal, 4)
+            Divider()
+                .frame(height: prefs.compactMode ? 22 : 28)
+                .padding(.horizontal, 4)
 
-                // Running & Pinned apps
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 2) {
-                        ForEach(appMonitor.runningApps) { app in
-                            AppTileView(
-                                app: app,
-                                isActive: app.pid != nil && app.pid == appMonitor.activeAppPID,
-                                onTap: {
-                                    handleAppTap(app)
-                                },
-                                onRightClick: {
-                                    // Context menu is handled via SwiftUI .contextMenu
-                                }
-                            )
-                            .onHover { hovering in
-                                handleAppHover(app: app, hovering: hovering)
+            // Running & Pinned apps
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 2) {
+                    ForEach(appMonitor.runningApps) { app in
+                        AppTileView(
+                            app: app,
+                            isActive: app.pid != nil && app.pid == appMonitor.activeAppPID,
+                            onTap: {
+                                handleAppTap(app)
+                            },
+                            onRightClick: {
+                                // Context menu is handled via SwiftUI .contextMenu
                             }
+                        )
+                        .onHover { hovering in
+                            handleAppHover(app: app, hovering: hovering)
                         }
                     }
-                    .padding(.horizontal, 4)
                 }
-
-                Spacer()
-
-                // System area (right side)
-                systemArea
+                .padding(.horizontal, 4)
             }
-            .padding(.horizontal, 8)
-            .frame(height: prefs.taskbarHeight)
 
-            // Window preview overlay (appears above the taskbar)
-            if prefs.showWindowPreviews, let previewApp = previewApp, !previewApp.windows.isEmpty {
-                WindowPreviewView(app: previewApp) { window in
-                    AppActionService.shared.activateWindow(
-                        for: previewApp,
-                        windowTitle: window.title
-                    )
-                    self.previewApp = nil
-                }
-                .offset(y: -(prefs.taskbarHeight + 8))
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
-                .zIndex(100)
-            }
+            Spacer()
+
+            // System area (right side)
+            systemArea
         }
-        .animation(.easeInOut(duration: 0.15), value: previewApp?.pid)
+        .padding(.horizontal, 8)
+        .frame(height: prefs.taskbarHeight)
         .onReceive(clockTimer) { date in
             currentDate = date
         }
@@ -141,35 +122,42 @@ struct TaskbarContentView: View {
     // MARK: - Interaction Handlers
 
     private func handleAppTap(_ app: RunningApp) {
-        // Dismiss preview
-        previewApp = nil
+        // Immediately dismiss any window preview without animation or delay
+        hoverTimer?.invalidate()
+        hoverTimer = nil
         hoveredAppPID = nil
+        WindowPreviewWindowController.shared.closePreview()
 
         // Toggle activation or launch
         AppActionService.shared.toggleActivation(for: app)
     }
 
     private func handleAppHover(app: RunningApp, hovering: Bool) {
-        guard prefs.showWindowPreviews else { return }
+        guard prefs.showWindowPreviews, app.isRunning, !app.windows.isEmpty else {
+            WindowPreviewWindowController.shared.closePreview()
+            return
+        }
+
         hoverTimer?.invalidate()
 
         if hovering {
             hoveredAppPID = app.pid
-            // Show preview after a short delay
-            hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: false) { _ in
+            let mouseX = NSEvent.mouseLocation.x
+            // Show preview after a short debounce
+            hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.35, repeats: false) { _ in
                 DispatchQueue.main.async {
-                    if self.hoveredAppPID == app.pid {
-                        self.previewApp = app
+                    if self.hoveredAppPID == app.pid, let screen = NSScreen.main ?? NSScreen.screens.first {
+                        WindowPreviewWindowController.shared.showPreview(for: app, screenX: mouseX, on: screen)
                     }
                 }
             }
         } else {
-            // Dismiss after a short delay (allows moving mouse to the preview)
-            hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.3, repeats: false) { _ in
+            // Dismiss after a short delay so the user can move to preview thumbnails
+            hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: false) { _ in
                 DispatchQueue.main.async {
                     if self.hoveredAppPID == app.pid {
                         self.hoveredAppPID = nil
-                        self.previewApp = nil
+                        WindowPreviewWindowController.shared.closePreview()
                     }
                 }
             }
