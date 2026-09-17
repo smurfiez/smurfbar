@@ -40,6 +40,12 @@ echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 if [ -f "$PROJECT_DIR/Resources/AppIcon.icns" ]; then
     cp "$PROJECT_DIR/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 fi
+if [ -f "$PROJECT_DIR/Resources/AppIcon.png" ]; then
+    cp "$PROJECT_DIR/Resources/AppIcon.png" "$APP_BUNDLE/Contents/Resources/AppIcon.png"
+fi
+
+# Copy any SPM resource bundles
+find "$BUILD_DIR" -name "*.bundle" -maxdepth 4 -exec cp -R {} "$APP_BUNDLE/Contents/Resources/" \; 2>/dev/null || true
 
 # Sign the app bundle so macOS TCC recognizes its bundle identifier and Info.plist
 echo "🔏 Signing app bundle..."

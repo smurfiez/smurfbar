@@ -7,7 +7,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "Smurfbar",
-            path: "Sources/Smurfbar"
+            path: "Sources/Smurfbar",
+            resources: [.process("Resources")]
         )
     ]
 )

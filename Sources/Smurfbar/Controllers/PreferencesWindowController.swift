@@ -19,6 +19,10 @@ class PreferencesWindowController: NSWindowController {
         let hostingView = NSHostingView(rootView: PreferencesView())
         window.contentView = hostingView
 
+        if let icon = AppIconProvider.shared.iconImage {
+            window.miniwindowImage = icon
+        }
+
         super.init(window: window)
     }
 

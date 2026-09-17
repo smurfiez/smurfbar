@@ -76,6 +76,9 @@ class StatusBarController {
         alert.messageText = "Smurfbar"
         alert.informativeText = "A Windows-style taskbar and desktop manager for macOS.\n\nVersion 0.5.0 (Phase 5)"
         alert.alertStyle = .informational
+        if let icon = AppIconProvider.shared.iconImage {
+            alert.icon = icon
+        }
         alert.addButton(withTitle: "OK")
         alert.runModal()
     }

@@ -46,6 +46,34 @@ struct PreferencesView: View {
 
     private var generalTab: some View {
         Form {
+            Section {
+                HStack(spacing: 14) {
+                    AppIconView(size: 52)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 8) {
+                            Text("Smurfbar")
+                                .font(.headline)
+                            Text("v\(updateService.currentVersion)")
+                                .font(.caption2)
+                                .fontWeight(.medium)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .background(Color.accentColor.opacity(0.12))
+                                .foregroundColor(.accentColor)
+                                .clipShape(Capsule())
+                        }
+
+                        Text("Windows-style taskbar and desktop manager for macOS")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+
+                    Spacer()
+                }
+                .padding(.vertical, 2)
+            }
+
             Section(header: Text("Taskbar Behavior")) {
                 Toggle("Launch Smurfbar at Login", isOn: $prefs.launchAtLogin)
                     .help("Automatically start Smurfbar when you log in")
@@ -246,9 +274,7 @@ struct PreferencesView: View {
 
     private var aboutTab: some View {
         VStack(spacing: 16) {
-            Image(systemName: "square.grid.2x2.fill")
-                .font(.system(size: 44))
-                .foregroundColor(.accentColor)
+            AppIconView(size: 88)
 
             VStack(spacing: 4) {
                 Text("Smurfbar")
