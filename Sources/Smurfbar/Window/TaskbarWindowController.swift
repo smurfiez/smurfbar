@@ -4,6 +4,7 @@ import SwiftUI
 /// Manages the lifecycle of a TaskbarPanel instance for a specific screen.
 class TaskbarWindowController {
     private(set) var panel: TaskbarPanel?
+    private(set) var isFullScreenSuppressed: Bool = false
     private var appMonitor: AppMonitor
     private var screenObserver: NSObjectProtocol?
     private var assignedScreen: NSScreen?
@@ -31,12 +32,21 @@ class TaskbarWindowController {
         let contentView = TaskbarContentView(appMonitor: appMonitor, screen: screen)
         taskbarPanel.setSwiftUIContent(contentView)
 
-        // Show the panel
-        taskbarPanel.orderFrontRegardless()
         self.panel = taskbarPanel
 
-        // Reserve screen space
-        reserveScreenSpace(on: screen)
+        // Check if this screen is already in full-screen mode (YouTube / game)
+        let isFS = FullScreenService.shared.isFullScreen(on: screen)
+        self.isFullScreenSuppressed = isFS
+        taskbarPanel.isFullScreenSuppressed = isFS
+
+        if isFS {
+            restoreScreenSpace(on: screen)
+        } else {
+            // Show the panel
+            taskbarPanel.orderFrontRegardless()
+            // Reserve screen space
+            reserveScreenSpace(on: screen)
+        }
 
         // Listen for screen changes
         screenObserver = NotificationCenter.default.addObserver(
@@ -55,6 +65,7 @@ class TaskbarWindowController {
         }
         panel?.orderOut(nil)
         panel = nil
+        isFullScreenSuppressed = false
 
         if let observer = screenObserver {
             NotificationCenter.default.removeObserver(observer)
@@ -71,12 +82,46 @@ class TaskbarWindowController {
         }
     }
 
+    /// Suppress (hide) or restore the taskbar when a full-screen window (YouTube/game) is active.
+    func setFullScreenSuppressed(_ suppressed: Bool) {
+        guard isFullScreenSuppressed != suppressed else { return }
+        isFullScreenSuppressed = suppressed
+        panel?.isFullScreenSuppressed = suppressed
+
+        guard let screen = currentScreen else { return }
+
+        if suppressed {
+            // Dismiss any open flyout windows
+            AppLauncherWindowController.shared.closeLauncher()
+            CalendarWindowController.shared.closeCalendar()
+            QuickSettingsWindowController.shared.closeQuickSettings()
+            WeatherWindowController.shared.closeWeather()
+            WindowPreviewWindowController.shared.closePreview()
+
+            // Restore full screen space for the app/game
+            restoreScreenSpace(on: screen)
+
+            // Hide the panel
+            panel?.orderOut(nil)
+        } else {
+            // Re-reserve taskbar space for standard windows
+            reserveScreenSpace(on: screen)
+
+            // Restore panel visibility
+            panel?.orderFrontRegardless()
+        }
+    }
+
     // MARK: - Screen Management
 
     func handleScreenChange() {
         guard let screen = currentScreen else { return }
         panel?.reposition(on: screen)
-        reserveScreenSpace(on: screen)
+        if isFullScreenSuppressed {
+            restoreScreenSpace(on: screen)
+        } else {
+            reserveScreenSpace(on: screen)
+        }
     }
 
     /// Update target screen if reconfigured

@@ -81,6 +81,9 @@ struct PreferencesView: View {
                 Toggle("Auto-hide Taskbar", isOn: $prefs.autoHide)
                     .help("Hide the taskbar when the cursor moves away from the edge of the screen")
 
+                Toggle("Hide When Full Screen (YouTube & Games)", isOn: $prefs.hideOnFullScreen)
+                    .help("Automatically hide the taskbar when playing full screen videos or running full screen games and apps")
+
                 Toggle("Compact Taskbar Height", isOn: $prefs.compactMode)
                     .help("Reduce taskbar thickness from 48px to 40px")
 

@@ -117,6 +117,7 @@ class PreferencesService: ObservableObject {
 
     // Keys
     private let keyAutoHide = "Smurfbar_AutoHide"
+    private let keyHideOnFullScreen = "Smurfbar_HideOnFullScreen"
     private let keyTheme = "Smurfbar_Theme"
     private let keyShowPreviews = "Smurfbar_ShowPreviews"
     private let keyCompactMode = "Smurfbar_CompactMode"
@@ -146,6 +147,10 @@ class PreferencesService: ObservableObject {
 
     @Published var autoHide: Bool {
         didSet { defaults.set(autoHide, forKey: keyAutoHide) }
+    }
+
+    @Published var hideOnFullScreen: Bool {
+        didSet { defaults.set(hideOnFullScreen, forKey: keyHideOnFullScreen) }
     }
 
     @Published var theme: ThemeMode {
@@ -272,6 +277,7 @@ class PreferencesService: ObservableObject {
 
     private init() {
         self.autoHide = defaults.bool(forKey: keyAutoHide)
+        self.hideOnFullScreen = defaults.object(forKey: keyHideOnFullScreen) == nil ? true : defaults.bool(forKey: keyHideOnFullScreen)
         let themeRaw = defaults.string(forKey: keyTheme) ?? ThemeMode.system.rawValue
         self.theme = ThemeMode(rawValue: themeRaw) ?? .system
         self.showWindowPreviews = defaults.object(forKey: keyShowPreviews) == nil ? true : defaults.bool(forKey: keyShowPreviews)

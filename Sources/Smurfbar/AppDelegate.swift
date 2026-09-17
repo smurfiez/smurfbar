@@ -21,11 +21,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appMonitor = AppMonitor()
         appMonitor.startMonitoring()
 
-        // 4. Create and manage taskbars across connected displays
+        // 4. Start FullScreenService to detect full screen video and games
+        FullScreenService.shared.start()
+
+        // 5. Create and manage taskbars across connected displays
         multiMonitorService = MultiMonitorService(appMonitor: appMonitor)
         multiMonitorService.setup()
 
-        // 5. Start Aero Snap edge detection and keyboard shortcuts
+        // 6. Start Aero Snap edge detection and keyboard shortcuts
         SnapZoneService.shared.start()
         KeyboardShortcutService.shared.start()
 
@@ -52,6 +55,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Stop multi-monitor taskbars
         multiMonitorService?.teardown()
+
+        // Stop full screen detection service
+        FullScreenService.shared.stop()
 
         // Stop monitoring
         appMonitor?.stopMonitoring()

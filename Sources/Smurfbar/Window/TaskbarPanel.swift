@@ -15,6 +15,7 @@ class TaskbarPanel: NSPanel {
     private var autoHideTimer: Timer?
     private var mouseMonitor: Any?
     private(set) var isPanelHidden: Bool = false
+    var isFullScreenSuppressed: Bool = false
     private weak var targetScreen: NSScreen?
 
     init(for screen: NSScreen) {
@@ -49,12 +50,7 @@ class TaskbarPanel: NSPanel {
         self.alphaValue = CGFloat(PreferencesService.shared.taskbarOpacity)
 
         // Behavior
-        self.collectionBehavior = [
-            .canJoinAllSpaces,     // Show on all Spaces/Desktops
-            .stationary,           // Don't move with spaces
-            .fullScreenAuxiliary,  // Show alongside fullscreen apps
-            .ignoresCycle          // Don't appear in Cmd+Tab / window cycling
-        ]
+        updateCollectionBehavior()
 
         // Don't show in Mission Control
         self.isExcludedFromWindowsMenu = true
@@ -131,6 +127,26 @@ class TaskbarPanel: NSPanel {
             .store(in: &cancellables)
 
         configureAutoHide(enabled: prefs.autoHide)
+
+        // Hide on full screen observer
+        prefs.$hideOnFullScreen
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.updateCollectionBehavior()
+            }
+            .store(in: &cancellables)
+    }
+
+    func updateCollectionBehavior() {
+        var behaviors: NSWindow.CollectionBehavior = [
+            .canJoinAllSpaces,     // Show on all Spaces/Desktops
+            .stationary,           // Don't move with spaces
+            .ignoresCycle          // Don't appear in Cmd+Tab / window cycling
+        ]
+        if !PreferencesService.shared.hideOnFullScreen {
+            behaviors.insert(.fullScreenAuxiliary)
+        }
+        self.collectionBehavior = behaviors
     }
 
     private func updateBorderPosition() {
@@ -182,7 +198,7 @@ class TaskbarPanel: NSPanel {
     }
 
     private func handleGlobalMouseMove() {
-        guard PreferencesService.shared.autoHide, let screen = targetScreen else { return }
+        guard PreferencesService.shared.autoHide, !isFullScreenSuppressed, let screen = targetScreen else { return }
         let mouseLocation = NSEvent.mouseLocation
         let pos = PreferencesService.shared.taskbarPosition
 

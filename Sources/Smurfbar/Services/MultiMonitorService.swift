@@ -44,9 +44,19 @@ class MultiMonitorService: ObservableObject {
                 self?.rebuildTaskbars()
             }
             .store(in: &cancellables)
+
+        // Handle full-screen transitions per display (YouTube / games)
+        FullScreenService.shared.onFullScreenStateChanged = { [weak self] displayID, isFullScreen in
+            guard let self = self else { return }
+            if let controller = self.controllers[displayID] {
+                controller.setFullScreenSuppressed(isFullScreen)
+            }
+        }
     }
 
     func teardown() {
+        FullScreenService.shared.onFullScreenStateChanged = nil
+
         if let observer = screenObserver {
             NotificationCenter.default.removeObserver(observer)
             screenObserver = nil
@@ -82,7 +92,9 @@ class MultiMonitorService: ObservableObject {
 
             if let existing = controllers[did] {
                 existing.updateScreen(screen)
-                if isVisible && existing.panel?.isVisible != true {
+                let isFS = FullScreenService.shared.isFullScreen(on: screen)
+                existing.setFullScreenSuppressed(isFS)
+                if isVisible && !isFS && existing.panel?.isVisible != true {
                     existing.showTaskbar()
                 }
             } else {
@@ -107,7 +119,9 @@ class MultiMonitorService: ObservableObject {
         isVisible.toggle()
         if isVisible {
             for controller in controllers.values {
-                controller.showTaskbar()
+                if !controller.isFullScreenSuppressed {
+                    controller.showTaskbar()
+                }
             }
         } else {
             for controller in controllers.values {
